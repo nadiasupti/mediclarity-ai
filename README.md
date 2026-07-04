@@ -6,15 +6,18 @@ A Streamlit app that reads a prescription image and uses Google Gemini Vision to
 
 - Upload a prescription image (JPG, JPEG, PNG)
 - Gemini Vision reads the image directly and explains it in plain Bangla (no separate OCR step)
+- AI overall summary and overall confidence for the whole prescription
+- Doctor information and diagnosis extraction (when visible on the prescription)
+- Drug interaction check and high-risk medicine flagging
 - A medicine timing table (সকাল/দুপুর/রাত and before/after meal) summarizing when to take each medicine
-- Clean card-based UI showing:
+- Clean card-based UI (2-column grid on wider screens) showing:
   - Medicine names
   - Purpose of each medicine
   - Dosage instructions
   - Possible side effects
   - Important precautions
   - A confidence badge (উচ্চ/মাঝারি/কম নির্ভরযোগ্যতা) showing how confident Gemini is in its reading of each medicine
-- Graceful error handling for missing API keys and API errors
+- Graceful error handling for missing API keys, network failures, and API errors
 
 ## Prerequisites
 
