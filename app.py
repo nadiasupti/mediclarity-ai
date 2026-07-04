@@ -44,59 +44,72 @@ def as_bool(value) -> bool:
         return value.strip().lower() == "true"
     return bool(value)
 
+
+def render_html(html_str: str) -> None:
+    """Render a multi-line HTML string via st.markdown, collapsed onto one line.
+
+    Streamlit's markdown parser treats 4+ leading spaces as an indented code
+    block, and a line that's empty after an interpolated value (e.g. an unset
+    high_risk badge) reads as a blank line that splits the block mid-way. Both
+    are avoided entirely by joining stripped, non-empty lines with a space so
+    the parser only ever sees a single line of raw HTML.
+    """
+    collapsed = " ".join(line.strip() for line in html_str.strip().splitlines() if line.strip())
+    st.markdown(collapsed, unsafe_allow_html=True)
+
 st.set_page_config(
     page_title="MediClarity AI",
     page_icon="💊",
     layout="centered",
 )
 
-st.markdown(
+render_html(
     """
     <link href="https://fonts.googleapis.com/css2?family=Hind+Siliguri:wght@400;500;600;700&display=swap" rel="stylesheet">
     <style>
-    .stApp, .stApp * {
+    .stApp {
         font-family: 'Hind Siliguri', sans-serif;
     }
     .main { background-color: #0f172a; }
-    .stButton>button {
-        background-color: #3b82f6;
-        color: white;
-        border-radius: 8px;
-        padding: 0.5rem 1.5rem;
-        border: none;
-    }
-    .stButton>button:hover { background-color: #2563eb; }
-    .hero-banner {
-        background: linear-gradient(135deg, #3b82f6, #1e3a8a);
-        border-radius: 16px;
-        padding: 2rem 1.5rem;
-        margin-bottom: 1.5rem;
-        text-align: center;
-        box-shadow: 0 8px 20px rgba(59, 130, 246, 0.25);
-    }
-    .hero-banner .hero-icon { font-size: 2.5rem; }
-    .hero-banner h1 {
-        color: white;
-        margin: 0.25rem 0 0.4rem 0;
-        font-size: 1.9rem;
-    }
-    .hero-banner p {
-        color: #dbeafe;
-        margin: 0;
-        font-size: 1rem;
-    }
-    .card {
-        background-color: #1e293b;
-        border: 1px solid #334155;
-        border-radius: 12px;
-        padding: 1.25rem 1.5rem;
-        margin-bottom: 1rem;
-        box-shadow: 0 1px 3px rgba(0,0,0,0.35);
-        color: #e2e8f0;
-    }
-    .card h3, .card p, .card strong {
-        color: #e2e8f0;
-    }
+        .stButton>button {
+            background-color: #3b82f6;
+            color: white;
+            border-radius: 8px;
+            padding: 0.5rem 1.5rem;
+            border: none;
+        }
+        .stButton>button:hover { background-color: #2563eb; }
+        .hero-banner {
+            background: linear-gradient(135deg, #3b82f6, #1e3a8a);
+            border-radius: 16px;
+            padding: 2rem 1.5rem;
+            margin-bottom: 1.5rem;
+            text-align: center;
+            box-shadow: 0 8px 20px rgba(59, 130, 246, 0.25);
+        }
+        .hero-banner .hero-icon { font-size: 2.5rem; }
+        .hero-banner h1 {
+            color: white;
+            margin: 0.25rem 0 0.4rem 0;
+            font-size: 1.9rem;
+        }
+        .hero-banner p {
+            color: #dbeafe;
+            margin: 0;
+            font-size: 1rem;
+        }
+        .card {
+            background-color: #1e293b;
+            border: 1px solid #334155;
+            border-radius: 12px;
+            padding: 1.25rem 1.5rem;
+            margin-bottom: 1rem;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.35);
+            color: #e2e8f0;
+        }
+        .card h3, .card p, .card strong {
+            color: #e2e8f0;
+        }
     .app-footer {
         text-align: center;
         color: #94a3b8;
@@ -104,8 +117,7 @@ st.markdown(
         padding: 1rem 0 0.5rem 0;
     }
     </style>
-    """,
-    unsafe_allow_html=True,
+    """
 )
 
 
@@ -222,15 +234,14 @@ with st.sidebar:
     st.divider()
     st.caption("⚠️ এটি একটি সহায়ক টুল, চিকিৎসা পরামর্শের বিকল্প নয়।")
 
-st.markdown(
+render_html(
     """
     <div class="hero-banner">
         <div class="hero-icon">💊</div>
         <h1>MediClarity AI</h1>
         <p>প্রেসক্রিপশনের ছবি আপলোড করুন — সহজ বাংলায় বুঝে নিন আপনার ওষুধ সম্পর্কে</p>
     </div>
-    """,
-    unsafe_allow_html=True,
+    """
 )
 
 step_cols = st.columns(3)
@@ -334,7 +345,7 @@ if uploaded_file is not None:
             overall_summary = html.escape(
                 result.get("overall_summary") or "কোনো সারসংক্ষেপ পাওয়া যায়নি।"
             )
-            st.markdown(
+            render_html(
                 f"""
                 <div class="card">
                     <h3>🧠 AI সারসংক্ষেপ
@@ -346,45 +357,41 @@ if uploaded_file is not None:
                     </h3>
                     <p>{overall_summary}</p>
                 </div>
-                """,
-                unsafe_allow_html=True,
+                """
             )
 
             doctor_info = html.escape(result.get("doctor_info") or "শনাক্ত করা যায়নি")
             diagnosis = html.escape(result.get("diagnosis") or "উল্লেখ করা হয়নি")
             info_cols = st.columns(2)
             with info_cols[0]:
-                st.markdown(
+                render_html(
                     f"""
                     <div class="card">
                         <h3>👨‍⚕️ ডাক্তারের তথ্য</h3>
                         <p>{doctor_info}</p>
                     </div>
-                    """,
-                    unsafe_allow_html=True,
+                    """
                 )
             with info_cols[1]:
-                st.markdown(
+                render_html(
                     f"""
                     <div class="card">
                         <h3>🩻 রোগ নির্ণয়</h3>
                         <p>{diagnosis}</p>
                     </div>
-                    """,
-                    unsafe_allow_html=True,
+                    """
                 )
 
             drug_interactions = html.escape(
                 result.get("drug_interactions") or "উল্লেখযোগ্য কোনো ইন্টারঅ্যাকশন শনাক্ত হয়নি"
             )
-            st.markdown(
+            render_html(
                 f"""
                 <div style="background-color:#450a0a; border-left:4px solid #dc2626;
                     border-radius:8px; padding:1rem 1.25rem; margin-bottom:1rem; color:#fecaca;">
                     💊⚠️ <strong>ড্রাগ ইন্টারঅ্যাকশন:</strong> {drug_interactions}
                 </div>
-                """,
-                unsafe_allow_html=True,
+                """
             )
 
             high_risk_meds = [med for med in valid_medicines if as_bool(med.get("high_risk"))]
@@ -392,15 +399,14 @@ if uploaded_file is not None:
                 risk_names = ", ".join(
                     html.escape(str(m.get("medicine_name", "অজানা ওষুধ"))) for m in high_risk_meds
                 )
-                st.markdown(
+                render_html(
                     f"""
                     <div style="background-color:#450a0a; border-left:4px solid #dc2626;
                         border-radius:8px; padding:1rem 1.25rem; margin-bottom:1rem; color:#fecaca;">
                         🚨 <strong>উচ্চ-ঝুঁকিপূর্ণ ওষুধ:</strong> {risk_names} — এই ওষুধ(গুলো)
                         বিশেষ সতর্কতার সাথে ও ডাক্তারের নির্দেশনা মেনে গ্রহণ করুন।
                     </div>
-                    """,
-                    unsafe_allow_html=True,
+                    """
                 )
 
             st.divider()
@@ -439,16 +445,14 @@ if uploaded_file is not None:
                     confidence_key, CONFIDENCE_BADGES["low"]
                 )
                 high_risk_badge = (
-                    """<span style="background-color:#450a0a; color:#fecaca;
-                        padding:2px 10px; border-radius:9999px; font-size:0.75rem;
-                        font-weight:600; vertical-align:middle;">
-                        🚨 উচ্চ ঝুঁকি
-                    </span>"""
+                    '<span style="background-color:#450a0a; color:#fecaca; padding:2px 10px; '
+                    'border-radius:9999px; font-size:0.75rem; font-weight:600; '
+                    'vertical-align:middle;">🚨 উচ্চ ঝুঁকি</span>'
                     if as_bool(med.get("high_risk"))
                     else ""
                 )
                 with card_cols[idx % 2]:
-                    st.markdown(
+                    render_html(
                         f"""
                         <div class="card">
                             <h3>🩺 {name}
@@ -464,28 +468,25 @@ if uploaded_file is not None:
                             <p><strong>সম্ভাব্য পার্শ্বপ্রতিক্রিয়া:</strong> {side_effects}</p>
                             <p><strong>সতর্কতা:</strong> {precautions}</p>
                         </div>
-                        """,
-                        unsafe_allow_html=True,
+                        """
                     )
 
-        st.markdown(
+        render_html(
             """
             <div style="background-color:#451a03; border-left:4px solid #d97706;
                 border-radius:8px; padding:1rem 1.25rem; margin-top:1.25rem; color:#fde68a;">
                 ⚠️ <strong>দ্রষ্টব্য:</strong> এই তথ্য শুধুমাত্র সহায়ক উদ্দেশ্যে। চূড়ান্ত
                 সিদ্ধান্তের জন্য সবসময় আপনার ডাক্তার বা ফার্মাসিস্টের পরামর্শ নিন।
             </div>
-            """,
-            unsafe_allow_html=True,
+            """
         )
 else:
     st.info("শুরু করতে উপরে একটি প্রেসক্রিপশনের ছবি আপলোড করুন।")
 
-st.markdown(
+render_html(
     """
     <div class="app-footer" style="text-align:center; padding:1rem; color:#6b7280; font-size:0.85rem;">
         MediClarity AI — Hackathon Project
     </div>
-    """,
-    unsafe_allow_html=True,
+    """
 )
