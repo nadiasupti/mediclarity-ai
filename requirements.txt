@@ -4,3 +4,5 @@ google-genai==2.10.0
 python-dotenv==1.2.2
 httpx==0.28.1
 gtts==2.5.4
+fpdf2==2.8.7
+uharfbuzz==0.55.0
