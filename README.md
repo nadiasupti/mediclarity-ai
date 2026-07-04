@@ -16,6 +16,8 @@ A simple web app that reads a photo of a prescription and explains it in **plain
 - **Drug interaction check** and **high-risk medicine warnings**.
 - **Daily schedule table** — which medicine to take in the morning/afternoon/night, and before/after/with meals.
 - **Per-medicine cards** — purpose, dosage, duration, side effects, precautions, and a confidence badge (how sure the AI is about that reading).
+- **Export the report** — download as PDF, download as TXT, print, or copy the full result to your clipboard.
+- **💬 Chat with your prescription** — ask follow-up questions in plain language ("Why was this medicine given?", "Should I take it on an empty stomach?"). The chatbot remembers the conversation and stays grounded in your specific prescription.
 - **Accessibility settings** (in the sidebar):
   - 🌐 Switch the whole app between Bangla and English
   - 🔊 Listen — plays the summary out loud as audio
@@ -27,6 +29,7 @@ A simple web app that reads a photo of a prescription and explains it in **plain
 - **Streamlit** — the web app framework
 - **Google Gemini 2.5 Flash (Vision)** — reads the prescription image and writes the explanation
 - **gTTS** — turns the summary into spoken audio
+- **fpdf2** — generates the downloadable PDF report (with a bundled Noto Sans Bengali font so Bangla text renders correctly)
 - **Python 3.9+**
 
 ---
@@ -98,6 +101,8 @@ streamlit run app.py
 3. Click the "Analyze Prescription" button.
 4. Read the results — summary, schedule table, and medicine cards.
 5. Click "🔊 Listen" to hear the summary read aloud.
+6. Use the ⬇️ PDF / ⬇️ TXT / 🖨️ Print / 📋 Copy buttons to save or share the report.
+7. Scroll to "💬 Chat with Your Prescription" to ask follow-up questions, either by typing or tapping a suggested question.
 
 ## Notes on accuracy
 
