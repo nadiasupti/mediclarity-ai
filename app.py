@@ -1,15 +1,31 @@
 """MediClarity AI - Streamlit app that explains prescriptions in simple Bangla."""
 
+import html
 import os
 import json
 
 import streamlit as st
 from PIL import Image
-import pytesseract
-from openai import OpenAI, OpenAIError
+from google import genai
+from google.genai import types, errors as genai_errors
 from dotenv import load_dotenv
 
 load_dotenv()
+
+GEMINI_MODEL = "gemini-2.5-flash"
+
+CONFIDENCE_BADGES = {
+    "high": ("উচ্চ নির্ভরযোগ্যতা", "#166534", "#dcfce7"),
+    "medium": ("মাঝারি নির্ভরযোগ্যতা", "#92400e", "#fef3c7"),
+    "low": ("কম নির্ভরযোগ্যতা", "#991b1b", "#fee2e2"),
+}
+
+MEAL_RELATION_LABELS = {
+    "before": "খাবারের আগে",
+    "after": "খাবারের পরে",
+    "with": "খাবারের সাথে",
+    "unspecified": "নির্দিষ্ট নয়",
+}
 
 st.set_page_config(
     page_title="MediClarity AI",
@@ -35,6 +51,10 @@ st.markdown(
         padding: 1.25rem 1.5rem;
         margin-bottom: 1rem;
         box-shadow: 0 1px 3px rgba(0,0,0,0.08);
+        color: #1f2937;
+    }
+    .card h3, .card p, .card strong {
+        color: #1f2937;
     }
     </style>
     """,
@@ -42,45 +62,50 @@ st.markdown(
 )
 
 
-def get_openai_client():
-    api_key = os.getenv("OPENAI_API_KEY")
+def get_gemini_client():
+    api_key = os.getenv("GEMINI_API_KEY")
     if not api_key:
         return None
-    return OpenAI(api_key=api_key)
+    return genai.Client(api_key=api_key)
 
 
-def extract_text_from_image(image: Image.Image) -> str:
-    return pytesseract.image_to_string(image).strip()
-
-
-def explain_prescription(client: OpenAI, ocr_text: str) -> dict:
+def explain_prescription(client: genai.Client, image: Image.Image) -> list:
     system_prompt = (
-        "You are a medical assistant that explains prescriptions to patients in simple, "
-        "easy-to-understand Bangla. You must always respond ONLY with valid JSON, no extra text. "
-        "The JSON must be a list of objects, one per medicine, each with these exact keys: "
-        "\"medicine_name\", \"purpose\", \"dosage\", \"side_effects\", \"precautions\". "
-        "All values must be written in simple Bangla, understandable by someone with no medical "
-        "background. If the OCR text is unclear or incomplete, make reasonable, clearly-labeled "
-        "assumptions and mention that the reading may be uncertain in the relevant field."
+        "You are a medical assistant that reads prescription images and explains them to "
+        "patients in simple, easy-to-understand Bangla. You must always respond ONLY with "
+        "valid JSON, no extra text. The JSON must be a list of objects, one per medicine, "
+        "each with these exact keys: \"medicine_name\", \"purpose\", \"dosage\", "
+        "\"side_effects\", \"precautions\", \"confidence\", \"timing\". All text values must "
+        "be written in simple Bangla, understandable by someone with no medical background. "
+        "The \"confidence\" value must be exactly one of \"high\", \"medium\", or \"low\" "
+        "(in English, lowercase), reflecting how confident you are that you read this "
+        "medicine's name and dosage correctly from the image. Use \"low\" whenever the "
+        "handwriting or print is unclear, and in that case make reasonable, clearly-labeled "
+        "assumptions in the other fields and mention that the reading may be uncertain. "
+        "The \"timing\" value must be an object with exactly these keys: \"morning\" "
+        "(boolean, true if this medicine should be taken in the morning), \"afternoon\" "
+        "(boolean, for noon/afternoon), \"night\" (boolean, for night), and "
+        "\"meal_relation\" (one of \"before\", \"after\", \"with\", or \"unspecified\", in "
+        "English lowercase, describing the medicine's relation to meals). Infer these from "
+        "the dosage instructions on the prescription; if the timing is not specified, set "
+        "all three time booleans to false and \"meal_relation\" to \"unspecified\"."
     )
 
-    response = client.chat.completions.create(
-        model="gpt-4o",
-        messages=[
-            {"role": "system", "content": system_prompt},
-            {
-                "role": "user",
-                "content": (
-                    "Below is the OCR-extracted text from a handwritten/printed prescription. "
-                    "Identify each medicine and explain it in simple Bangla as instructed.\n\n"
-                    f"OCR TEXT:\n{ocr_text}"
-                ),
-            },
-        ],
-        temperature=0.3,
+    user_prompt = (
+        "Below is an image of a handwritten/printed prescription. "
+        "Identify each medicine and explain it in simple Bangla as instructed."
     )
 
-    content = response.choices[0].message.content.strip()
+    response = client.models.generate_content(
+        model=GEMINI_MODEL,
+        contents=[image, user_prompt],
+        config=types.GenerateContentConfig(
+            system_instruction=system_prompt,
+            temperature=0.3,
+        ),
+    )
+
+    content = response.text.strip()
 
     if content.startswith("```"):
         content = content.strip("`")
@@ -101,10 +126,11 @@ def explain_prescription(client: OpenAI, ocr_text: str) -> dict:
 st.title("💊 MediClarity AI")
 st.caption("প্রেসক্রিপশনের ছবি আপলোড করুন — সহজ বাংলায় বুঝে নিন আপনার ওষুধ সম্পর্কে")
 
-client = get_openai_client()
-if client is None:
+gemini_client = get_gemini_client()
+
+if gemini_client is None:
     st.error(
-        "OPENAI_API_KEY পাওয়া যায়নি। `.env` ফাইলে আপনার OpenAI API key সেট করুন "
+        "GEMINI_API_KEY পাওয়া যায়নি। `.env` ফাইলে আপনার Gemini API key সেট করুন "
         "(দেখুন `.env.example`)।"
     )
 
@@ -122,36 +148,17 @@ if uploaded_file is not None:
 
     st.image(image, caption="আপলোড করা প্রেসক্রিপশন", use_container_width=True)
 
-    analyze_clicked = st.button("প্রেসক্রিপশন বিশ্লেষণ করুন", disabled=client is None)
+    analyze_clicked = st.button(
+        "প্রেসক্রিপশন বিশ্লেষণ করুন",
+        disabled=gemini_client is None,
+    )
 
     if analyze_clicked:
-        with st.spinner("ছবি থেকে লেখা পড়া হচ্ছে..."):
+        with st.spinner("Gemini দিয়ে প্রেসক্রিপশন বিশ্লেষণ করা হচ্ছে..."):
             try:
-                ocr_text = extract_text_from_image(image)
-            except pytesseract.TesseractNotFoundError:
-                st.error(
-                    "Tesseract OCR engine পাওয়া যায়নি। এটি ইনস্টল করুন এবং সিস্টেম PATH-এ যোগ করুন। "
-                    "(README.md দেখুন বিস্তারিত নির্দেশনার জন্য।)"
-                )
-                st.stop()
-            except Exception as exc:
-                st.error(f"ছবি থেকে লেখা বের করতে সমস্যা হয়েছে: {exc}")
-                st.stop()
-
-        if not ocr_text:
-            st.warning(
-                "ছবি থেকে কোনো লেখা শনাক্ত করা যায়নি। দয়া করে আরও স্পষ্ট ছবি আপলোড করুন।"
-            )
-            st.stop()
-
-        with st.expander("OCR থেকে প্রাপ্ত মূল লেখা দেখুন"):
-            st.text(ocr_text)
-
-        with st.spinner("GPT-4o দিয়ে প্রেসক্রিপশন বিশ্লেষণ করা হচ্ছে..."):
-            try:
-                medicines = explain_prescription(client, ocr_text)
-            except OpenAIError as exc:
-                st.error(f"OpenAI API-তে সমস্যা হয়েছে: {exc}")
+                medicines = explain_prescription(gemini_client, image)
+            except genai_errors.APIError as exc:
+                st.error(f"Gemini API-তে সমস্যা হয়েছে: {exc}")
                 st.stop()
             except json.JSONDecodeError:
                 st.error(
@@ -162,25 +169,65 @@ if uploaded_file is not None:
                 st.error(f"একটি অপ্রত্যাশিত সমস্যা হয়েছে: {exc}")
                 st.stop()
 
+        valid_medicines = [med for med in medicines if isinstance(med, dict)]
+
         if not medicines:
             st.warning("কোনো ওষুধ শনাক্ত করা যায়নি।")
+        elif not valid_medicines:
+            st.error(
+                "AI-এর উত্তর প্রত্যাশিত ফরম্যাটে পাওয়া যায়নি। দয়া করে আবার চেষ্টা করুন।"
+            )
         else:
-            st.success(f"{len(medicines)} টি ওষুধ শনাক্ত হয়েছে")
-            for med in medicines:
-                name = med.get("medicine_name", "অজানা ওষুধ")
-                with st.container():
-                    st.markdown(f'<div class="card">', unsafe_allow_html=True)
-                    st.subheader(f"🩺 {name}")
-                    st.markdown(f"**উদ্দেশ্য:** {med.get('purpose', 'তথ্য পাওয়া যায়নি')}")
-                    st.markdown(f"**সেবনবিধি:** {med.get('dosage', 'তথ্য পাওয়া যায়নি')}")
-                    st.markdown(
-                        f"**সম্ভাব্য পার্শ্বপ্রতিক্রিয়া:** "
-                        f"{med.get('side_effects', 'তথ্য পাওয়া যায়নি')}"
-                    )
-                    st.markdown(
-                        f"**সতর্কতা:** {med.get('precautions', 'তথ্য পাওয়া যায়নি')}"
-                    )
-                    st.markdown("</div>", unsafe_allow_html=True)
+            st.success(f"{len(valid_medicines)} টি ওষুধ শনাক্ত হয়েছে")
+
+            st.subheader("🕒 ওষুধ সেবনের সময়সূচি")
+            timing_rows = []
+            for med in valid_medicines:
+                timing = med.get("timing")
+                if not isinstance(timing, dict):
+                    timing = {}
+                meal_key = str(timing.get("meal_relation", "unspecified")).strip().lower()
+                timing_rows.append(
+                    {
+                        "ওষুধ": str(med.get("medicine_name", "অজানা ওষুধ")),
+                        "সকাল": "✔️" if timing.get("morning") else "—",
+                        "দুপুর": "✔️" if timing.get("afternoon") else "—",
+                        "রাত": "✔️" if timing.get("night") else "—",
+                        "খাবারের সময়": MEAL_RELATION_LABELS.get(
+                            meal_key, MEAL_RELATION_LABELS["unspecified"]
+                        ),
+                    }
+                )
+            st.table(timing_rows)
+
+            for med in valid_medicines:
+                name = html.escape(str(med.get("medicine_name", "অজানা ওষুধ")))
+                purpose = html.escape(str(med.get("purpose", "তথ্য পাওয়া যায়নি")))
+                dosage = html.escape(str(med.get("dosage", "তথ্য পাওয়া যায়নি")))
+                side_effects = html.escape(str(med.get("side_effects", "তথ্য পাওয়া যায়নি")))
+                precautions = html.escape(str(med.get("precautions", "তথ্য পাওয়া যায়নি")))
+                confidence_key = str(med.get("confidence", "low")).strip().lower()
+                confidence_label, confidence_fg, confidence_bg = CONFIDENCE_BADGES.get(
+                    confidence_key, CONFIDENCE_BADGES["low"]
+                )
+                st.markdown(
+                    f"""
+                    <div class="card">
+                        <h3>🩺 {name}
+                            <span style="background-color:{confidence_bg}; color:{confidence_fg};
+                                padding:2px 10px; border-radius:9999px; font-size:0.75rem;
+                                font-weight:600; vertical-align:middle;">
+                                {confidence_label}
+                            </span>
+                        </h3>
+                        <p><strong>উদ্দেশ্য:</strong> {purpose}</p>
+                        <p><strong>সেবনবিধি:</strong> {dosage}</p>
+                        <p><strong>সম্ভাব্য পার্শ্বপ্রতিক্রিয়া:</strong> {side_effects}</p>
+                        <p><strong>সতর্কতা:</strong> {precautions}</p>
+                    </div>
+                    """,
+                    unsafe_allow_html=True,
+                )
 
         st.info(
             "⚠️ এই তথ্য শুধুমাত্র সহায়ক উদ্দেশ্যে। চূড়ান্ত সিদ্ধান্তের জন্য সবসময় আপনার "
