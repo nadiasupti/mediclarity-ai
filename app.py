@@ -1,9 +1,12 @@
 """MediClarity AI - Streamlit app that explains prescriptions in simple Bangla."""
 
+import hashlib
 import html
+import io
 import os
 import json
 
+import httpx
 import streamlit as st
 from PIL import Image
 from google import genai
@@ -69,6 +72,20 @@ def get_gemini_client():
     return genai.Client(api_key=api_key)
 
 
+def prepare_image_part(image: Image.Image, max_dimension: int = 2048, quality: int = 85) -> types.Part:
+    """Downscale and JPEG-encode the image before sending it to Gemini.
+
+    PIL drops an image's format after .convert("RGB"), so the SDK's own PIL-to-blob
+    logic always re-encodes as lossless PNG - on a large photo that can balloon a
+    6 MB JPEG into 25+ MB, risking slow uploads and hitting request size limits.
+    """
+    resized = image.copy()
+    resized.thumbnail((max_dimension, max_dimension), Image.Resampling.LANCZOS)
+    buffer = io.BytesIO()
+    resized.save(buffer, format="JPEG", quality=quality)
+    return types.Part.from_bytes(data=buffer.getvalue(), mime_type="image/jpeg")
+
+
 def explain_prescription(client: genai.Client, image: Image.Image) -> list:
     system_prompt = (
         "You are a medical assistant that reads prescription images and explains them to "
@@ -98,7 +115,7 @@ def explain_prescription(client: genai.Client, image: Image.Image) -> list:
 
     response = client.models.generate_content(
         model=GEMINI_MODEL,
-        contents=[image, user_prompt],
+        contents=[prepare_image_part(image), user_prompt],
         config=types.GenerateContentConfig(
             system_instruction=system_prompt,
             temperature=0.3,
@@ -126,6 +143,23 @@ def explain_prescription(client: genai.Client, image: Image.Image) -> list:
 st.title("💊 MediClarity AI")
 st.caption("প্রেসক্রিপশনের ছবি আপলোড করুন — সহজ বাংলায় বুঝে নিন আপনার ওষুধ সম্পর্কে")
 
+step_cols = st.columns(3)
+STEPS = [
+    ("📤", "ছবি আপলোড করুন", "প্রেসক্রিপশনের স্পষ্ট ছবি দিন"),
+    ("🤖", "AI বিশ্লেষণ করবে", "Gemini Vision ছবিটি পড়ে বুঝবে"),
+    ("📋", "ফলাফল দেখুন", "সহজ বাংলায় বিস্তারিত পাবেন"),
+]
+for col, (icon, step_title, step_desc) in zip(step_cols, STEPS):
+    with col:
+        st.markdown(
+            f"<div style='text-align:center; font-size:1.75rem;'>{icon}</div>",
+            unsafe_allow_html=True,
+        )
+        st.markdown(f"<p style='text-align:center;'><strong>{step_title}</strong></p>", unsafe_allow_html=True)
+        st.caption(step_desc)
+
+st.divider()
+
 gemini_client = get_gemini_client()
 
 if gemini_client is None:
@@ -140,6 +174,8 @@ uploaded_file = st.file_uploader(
 )
 
 if uploaded_file is not None:
+    file_hash = hashlib.md5(uploaded_file.getvalue()).hexdigest()
+
     try:
         image = Image.open(uploaded_file).convert("RGB")
     except Exception:
@@ -149,16 +185,27 @@ if uploaded_file is not None:
     st.image(image, caption="আপলোড করা প্রেসক্রিপশন", use_container_width=True)
 
     analyze_clicked = st.button(
-        "প্রেসক্রিপশন বিশ্লেষণ করুন",
+        "🔍 প্রেসক্রিপশন বিশ্লেষণ করুন",
         disabled=gemini_client is None,
+        use_container_width=True,
     )
 
-    if analyze_clicked:
+    already_cached = st.session_state.get("cached_file_hash") == file_hash
+
+    if analyze_clicked and not already_cached:
         with st.spinner("Gemini দিয়ে প্রেসক্রিপশন বিশ্লেষণ করা হচ্ছে..."):
             try:
                 medicines = explain_prescription(gemini_client, image)
+                st.session_state["cached_file_hash"] = file_hash
+                st.session_state["cached_medicines"] = medicines
             except genai_errors.APIError as exc:
                 st.error(f"Gemini API-তে সমস্যা হয়েছে: {exc}")
+                st.stop()
+            except httpx.TransportError:
+                st.error(
+                    "ইন্টারনেট সংযোগে সমস্যা হয়েছে। দয়া করে আপনার সংযোগ পরীক্ষা করে "
+                    "আবার চেষ্টা করুন।"
+                )
                 st.stop()
             except json.JSONDecodeError:
                 st.error(
@@ -169,6 +216,8 @@ if uploaded_file is not None:
                 st.error(f"একটি অপ্রত্যাশিত সমস্যা হয়েছে: {exc}")
                 st.stop()
 
+    if st.session_state.get("cached_file_hash") == file_hash:
+        medicines = st.session_state["cached_medicines"]
         valid_medicines = [med for med in medicines if isinstance(med, dict)]
 
         if not medicines:
@@ -178,8 +227,9 @@ if uploaded_file is not None:
                 "AI-এর উত্তর প্রত্যাশিত ফরম্যাটে পাওয়া যায়নি। দয়া করে আবার চেষ্টা করুন।"
             )
         else:
-            st.success(f"{len(valid_medicines)} টি ওষুধ শনাক্ত হয়েছে")
+            st.success(f"✅ বিশ্লেষণ সম্পন্ন — {len(valid_medicines)} টি ওষুধ শনাক্ত হয়েছে")
 
+            st.divider()
             st.subheader("🕒 ওষুধ সেবনের সময়সূচি")
             timing_rows = []
             for med in valid_medicines:
@@ -199,6 +249,9 @@ if uploaded_file is not None:
                     }
                 )
             st.table(timing_rows)
+
+            st.divider()
+            st.subheader("🩺 বিস্তারিত ব্যাখ্যা")
 
             for med in valid_medicines:
                 name = html.escape(str(med.get("medicine_name", "অজানা ওষুধ")))
@@ -229,9 +282,15 @@ if uploaded_file is not None:
                     unsafe_allow_html=True,
                 )
 
-        st.info(
-            "⚠️ এই তথ্য শুধুমাত্র সহায়ক উদ্দেশ্যে। চূড়ান্ত সিদ্ধান্তের জন্য সবসময় আপনার "
-            "ডাক্তার বা ফার্মাসিস্টের পরামর্শ নিন।"
+        st.markdown(
+            """
+            <div style="background-color:#fef3c7; border-left:4px solid #d97706;
+                border-radius:8px; padding:1rem 1.25rem; margin-top:1.25rem; color:#78350f;">
+                ⚠️ <strong>দ্রষ্টব্য:</strong> এই তথ্য শুধুমাত্র সহায়ক উদ্দেশ্যে। চূড়ান্ত
+                সিদ্ধান্তের জন্য সবসময় আপনার ডাক্তার বা ফার্মাসিস্টের পরামর্শ নিন।
+            </div>
+            """,
+            unsafe_allow_html=True,
         )
 else:
     st.info("শুরু করতে উপরে একটি প্রেসক্রিপশনের ছবি আপলোড করুন।")
