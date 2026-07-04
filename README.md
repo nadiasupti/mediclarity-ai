@@ -1,28 +1,25 @@
 # MediClarity AI
 
-A Streamlit app that reads a prescription image, extracts the text with OCR, and uses OpenAI GPT-4o to explain the prescription in simple Bangla — medicine names, purpose, dosage, side effects, and precautions.
+A Streamlit app that reads a prescription image and uses Google Gemini Vision to explain it in simple Bangla — medicine names, purpose, dosage, side effects, and precautions.
 
 ## Features
 
 - Upload a prescription image (JPG, JPEG, PNG)
-- OCR text extraction with Tesseract
-- GPT-4o powered explanation in plain Bangla
+- Gemini Vision reads the image directly and explains it in plain Bangla (no separate OCR step)
+- A medicine timing table (সকাল/দুপুর/রাত and before/after meal) summarizing when to take each medicine
 - Clean card-based UI showing:
   - Medicine names
   - Purpose of each medicine
   - Dosage instructions
   - Possible side effects
   - Important precautions
-- Graceful error handling for missing API keys, OCR failures, and API errors
+  - A confidence badge (উচ্চ/মাঝারি/কম নির্ভরযোগ্যতা) showing how confident Gemini is in its reading of each medicine
+- Graceful error handling for missing API keys and API errors
 
 ## Prerequisites
 
 - Python 3.9+
-- [Tesseract OCR engine](https://github.com/tesseract-ocr/tesseract) installed on your system
-  - **Windows:** install from the [UB Mannheim build](https://github.com/UB-Mannheim/tesseract/wiki) and add the install folder (e.g. `C:\Program Files\Tesseract-OCR`) to your PATH.
-  - **macOS:** `brew install tesseract`
-  - **Linux (Debian/Ubuntu):** `sudo apt install tesseract-ocr`
-- An OpenAI API key with access to `gpt-4o`
+- A free [Google Gemini API key](https://aistudio.google.com/apikey) (Google AI Studio → "Create API key")
 
 ## Installation
 
@@ -39,7 +36,7 @@ A Streamlit app that reads a prescription image, extracts the text with OCR, and
    pip install -r requirements.txt
    ```
 
-## Setting the API key
+## Setting the API keys
 
 1. Copy `.env.example` to `.env`:
 
@@ -50,7 +47,7 @@ A Streamlit app that reads a prescription image, extracts the text with OCR, and
 2. Open `.env` and set your key:
 
    ```
-   OPENAI_API_KEY=sk-your-real-key-here
+   GEMINI_API_KEY=your-real-gemini-key-here
    ```
 
 The `.env` file is already excluded from version control via `.gitignore`.
@@ -67,7 +64,11 @@ Then open the URL Streamlit prints (usually `http://localhost:8501`) in your bro
 
 1. Upload a clear photo or scan of a prescription (JPG/JPEG/PNG).
 2. Click "প্রেসক্রিপশন বিশ্লেষণ করুন" (Analyze Prescription).
-3. Review the OCR text (optional, in the expandable section) and the Bangla explanation cards for each medicine.
+3. Review the Bangla explanation cards for each medicine.
+
+## Notes on accuracy
+
+Gemini Vision works best on clear, well-lit photos. Handwritten prescriptions with messy handwriting are harder to read reliably — if the model is unsure about a medicine, it will note that the reading may be uncertain rather than guessing silently.
 
 ## Disclaimer
 
