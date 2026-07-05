@@ -15,9 +15,11 @@ A simple web app that reads a photo of a prescription and explains it in **plain
 - **Dates** — prescription date and follow-up date (if mentioned).
 - **Drug interaction check** and **high-risk medicine warnings**.
 - **Daily schedule table** — which medicine to take in the morning/afternoon/night, and before/after/with meals.
+- **🗓️ AI Treatment Timeline** — a full day-by-day plan (e.g. "Day 1–5", "Day 6–7") built from each medicine's duration, so you can see exactly which medicines are active on which day and when a medicine's course ends. Medicines with no clear duration are marked "Ongoing". Generated fresh from the current prescription only — no reminders, notifications, accounts, or storage involved.
 - **Per-medicine cards** — purpose, dosage, duration, side effects, precautions, and a confidence badge (how sure the AI is about that reading).
 - **Export the report** — download as PDF, download as TXT, print, or copy the full result to your clipboard.
 - **💬 Chat with your prescription** — ask follow-up questions in plain language ("Why was this medicine given?", "Should I take it on an empty stomach?"). The chatbot remembers the conversation and stays grounded in your specific prescription.
+- **🧪 AI Medical Test Report Interpreter** — upload a lab/test report (image or PDF) separately from the prescription. For each test it explains why it's typically done, what your result means in plain language, and marks it 🟢 Normal / 🟡 Borderline / 🔴 Abnormal — without ever stating a diagnosis. If you've analyzed both a prescription and a test report, click **⚖️ Compare with Prescription** to see whether your medicines line up with your results.
 - **Accessibility settings** (in the sidebar):
   - 🌐 Switch the whole app between Bangla and English
   - 🔊 Listen — plays the summary out loud as audio
@@ -103,6 +105,8 @@ streamlit run app.py
 5. Click "🔊 Listen" to hear the summary read aloud.
 6. Use the ⬇️ PDF / ⬇️ TXT / 🖨️ Print / 📋 Copy buttons to save or share the report.
 7. Scroll to "💬 Chat with Your Prescription" to ask follow-up questions, either by typing or tapping a suggested question.
+8. Further down, upload a lab/test report (image or PDF) under "🧪 Medical Test Report Interpreter" and click "Analyze Test Report" to get the same kind of plain-language breakdown, per test.
+9. If you've analyzed both, click "⚖️ Compare with Prescription" to check whether your medicines are consistent with your test results.
 
 ## Notes on accuracy
 
