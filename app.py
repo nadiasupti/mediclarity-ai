@@ -23,7 +23,7 @@ load_dotenv()
 BENGALI_FONT_PATH = os.path.join(os.path.dirname(__file__), "assets", "fonts", "NotoSansBengali-Regular.ttf")
 
 GEMINI_MODEL = "gemini-2.5-flash"
-
+#----------------------------CONFIDENCE --------------------------------------------------------------------------------
 CONFIDENCE_LABELS = {
     "বাংলা": {"high": "উচ্চ নির্ভরযোগ্যতা", "medium": "মাঝারি নির্ভরযোগ্যতা", "low": "কম নির্ভরযোগ্যতা"},
     "English": {"high": "High Reliability", "medium": "Medium Reliability", "low": "Low Reliability"},
@@ -53,9 +53,8 @@ def get_confidence_badges(language: str, colorblind_mode: bool) -> dict:
         for key in ("high", "medium", "low")
     }
 
-
 CONFIDENCE_PERCENT = {"high": 85, "medium": 60, "low": 35}
-
+#-------------------------MEAL RELATIONSHIP --------------------------------------------------------------------------------    
 MEAL_RELATION_TEXT = {
     "বাংলা": {
         "before": "খাবারের আগে", "after": "খাবারের পরে",
@@ -128,7 +127,7 @@ def build_treatment_timeline(valid_medicines: list) -> list:
 
     return ranges
 
-
+#-------------------------DANGER COLORS --------------------------------------------------------------------------------
 # Danger/alert colors (drug interactions, high-risk medicine). The colorblind
 # variant swaps red for dark-indigo/amber, since red-on-dark can be hard to
 # distinguish from other saturated colors used elsewhere in the UI.
@@ -163,6 +162,7 @@ def get_test_status_badges(language: str, colorblind_mode: bool) -> dict:
     }
 
 TRANSLATIONS = {
+     #==========================bangla TRANSLATIONS ==========================
     "বাংলা": {
         "hero_subtitle": "প্রেসক্রিপশনের ছবি আপলোড করুন — সহজ বাংলায় বুঝে নিন আপনার ওষুধ সম্পর্কে",
         "step1_title": "ছবি আপলোড করুন", "step1_desc": "প্রেসক্রিপশনের স্পষ্ট ছবি দিন",
@@ -191,6 +191,7 @@ TRANSLATIONS = {
         ),
         "error_parse": "AI-এর উত্তর সঠিকভাবে বোঝা যায়নি। দয়া করে আবার চেষ্টা করুন।",
         "error_unexpected_prefix": "একটি অপ্রত্যাশিত সমস্যা হয়েছে: ",
+        "pdf_generation_failed": "PDF রিপোর্ট তৈরি করা যায়নি। আপনি TXT বা প্রিন্ট বিকল্প ব্যবহার করতে পারেন।",
         "no_medicines": "কোনো ওষুধ শনাক্ত করা যায়নি।",
         "bad_format": "AI-এর উত্তর প্রত্যাশিত ফরম্যাটে পাওয়া যায়নি। দয়া করে আবার চেষ্টা করুন।",
         "success_prefix": "✅ বিশ্লেষণ সম্পন্ন — ",
@@ -351,6 +352,7 @@ TRANSLATIONS = {
         ),
         "accessibility_heading": "⚙️ Accessibility",
     },
+    #==========================ENGLISH TRANSLATIONS ==========================
     "English": {
         "hero_subtitle": "Upload a prescription image — understand your medicines in plain English",
         "step1_title": "Upload Image", "step1_desc": "Provide a clear prescription photo",
@@ -377,6 +379,7 @@ TRANSLATIONS = {
         "error_network": "A network error occurred. Please check your connection and try again.",
         "error_parse": "Could not properly understand the AI's response. Please try again.",
         "error_unexpected_prefix": "An unexpected error occurred: ",
+        "pdf_generation_failed": "Could not generate the PDF report. You can still use the TXT or Print options.",
         "no_medicines": "No medicines were identified.",
         "bad_format": "The AI's response wasn't in the expected format. Please try again.",
         "success_prefix": "✅ Analysis complete — ",
@@ -620,9 +623,12 @@ def copy_button(text: str, label: str, success_text: str, failed_text: str, dom_
     permissions policy inside the iframe that st.components.v1.html renders
     into, while execCommand works without any special permission grant.
     """
-    safe_text = json.dumps(text)
-    safe_success = json.dumps(success_text)
-    safe_failed = json.dumps(failed_text)
+    # json.dumps() does not escape "</", so a "</script>" substring inside `text`
+    # (e.g. AI-transcribed text from an adversarial prescription image) would
+    # otherwise close this script tag early and let the rest run as live HTML/JS.
+    safe_text = json.dumps(text).replace("</", "<\\/")
+    safe_success = json.dumps(success_text).replace("</", "<\\/")
+    safe_failed = json.dumps(failed_text).replace("</", "<\\/")
     components.html(
         f"""
         <html>
@@ -1917,13 +1923,15 @@ def explain_prescription(client: genai.Client, image: Image.Image, content_langu
     medicines = data.get("medicines")
     if not isinstance(medicines, list):
         medicines = []
+    medicines = [med for med in medicines if isinstance(med, dict)]
 
     patient_info_raw = data.get("patient_info")
     if not isinstance(patient_info_raw, dict):
         patient_info_raw = {}
+    age_raw = patient_info_raw.get("age")
     patient_info = {
         "name": str(patient_info_raw.get("name") or "").strip(),
-        "age": str(patient_info_raw.get("age") or "").strip(),
+        "age": ("" if age_raw is None else str(age_raw)).strip(),
     }
 
     doctor_info_raw = data.get("doctor_info")
@@ -1945,7 +1953,7 @@ def explain_prescription(client: genai.Client, image: Image.Image, content_langu
 
     return {
         "overall_summary": str(data.get("overall_summary") or "").strip(),
-        "overall_confidence": str(data.get("overall_confidence", "low")).strip().lower(),
+        "overall_confidence": str(data.get("overall_confidence") or "low").strip().lower(),
         "patient_info": patient_info,
         "doctor_info": doctor_info,
         "prescription_date": str(data.get("prescription_date") or "").strip(),
@@ -2025,13 +2033,15 @@ def explain_test_report(
     tests = data.get("tests")
     if not isinstance(tests, list):
         tests = []
+    tests = [test for test in tests if isinstance(test, dict)]
 
     patient_info_raw = data.get("patient_info")
     if not isinstance(patient_info_raw, dict):
         patient_info_raw = {}
+    age_raw = patient_info_raw.get("age")
     patient_info = {
         "name": str(patient_info_raw.get("name") or "").strip(),
-        "age": str(patient_info_raw.get("age") or "").strip(),
+        "age": ("" if age_raw is None else str(age_raw)).strip(),
     }
 
     lab_info_raw = data.get("lab_info")
@@ -2044,7 +2054,7 @@ def explain_test_report(
 
     return {
         "overall_summary": str(data.get("overall_summary") or "").strip(),
-        "overall_confidence": str(data.get("overall_confidence", "low")).strip().lower(),
+        "overall_confidence": str(data.get("overall_confidence") or "low").strip().lower(),
         "patient_info": patient_info,
         "lab_info": lab_info,
         "report_date": str(data.get("report_date") or "").strip(),
@@ -2422,8 +2432,9 @@ with st.sidebar:
 
     elderly_mode = st.toggle("🧓 বড় ফন্ট মোড (Elderly Mode)", key="elderly_mode")
 
-    # CHANGED: Kept Color Blind mode as a working global UI setting, not only badge colors.
-    colorblind_mode = st.toggle("🎨 Color Blind Friendly Mode", key="colorblind_mode")
+    # COLORBLIND FEATURE DISABLED (commented out on request):
+    # colorblind_mode = st.toggle("🎨 Color Blind Friendly Mode", key="colorblind_mode")
+    colorblind_mode = False
 
     st.divider()
     st.caption("⚠️ এটি একটি সহায়ক টুল, চিকিৎসা পরামর্শের বিকল্প নয়।")
@@ -2809,32 +2820,33 @@ if appearance_mode == "Light":
         """
     )
 
-# CHANGED: Color Blind global override. It avoids relying on red/green as the main app accent.
-if colorblind_mode:
-    render_html(
-        """
-        <style>
-        .hero-banner, .stButton > button, .stDownloadButton > button,
-        .st-key-sidebar_nav .stButton > button[kind="primary"], .bubble-user {
-            background: linear-gradient(135deg, #2563eb, #0891b2) !important;
-        }
-        .sidebar-logo-circle, .chat-avatar, .chat-avatar-sm, .st-key-chat_fab .stButton > button {
-            background: linear-gradient(135deg, #2563eb, #0891b2, #f97316) !important;
-        }
-        .overview-progress-fill, .stat-progress-fill {
-            background: linear-gradient(90deg, #2563eb, #f97316) !important;
-        }
-        .summary-hero-card, .card:hover {
-            border-color: rgba(249, 115, 22, 0.35) !important;
-        }
-        .risk-pill.high-risk {
-            background: rgba(249, 115, 22, 0.16) !important;
-            color: #fed7aa !important;
-            border-color: rgba(249, 115, 22, 0.35) !important;
-        }
-        </style>
-        """
-    )
+# COLORBLIND FEATURE DISABLED (commented out on request):
+# # CHANGED: Color Blind global override. It avoids relying on red/green as the main app accent.
+# if colorblind_mode:
+#     render_html(
+#         """
+#         <style>
+#         .hero-banner, .stButton > button, .stDownloadButton > button,
+#         .st-key-sidebar_nav .stButton > button[kind="primary"], .bubble-user {
+#             background: linear-gradient(135deg, #2563eb, #0891b2) !important;
+#         }
+#         .sidebar-logo-circle, .chat-avatar, .chat-avatar-sm, .st-key-chat_fab .stButton > button {
+#             background: linear-gradient(135deg, #2563eb, #0891b2, #f97316) !important;
+#         }
+#         .overview-progress-fill, .stat-progress-fill {
+#             background: linear-gradient(90deg, #2563eb, #f97316) !important;
+#         }
+#         .summary-hero-card, .card:hover {
+#             border-color: rgba(249, 115, 22, 0.35) !important;
+#         }
+#         .risk-pill.high-risk {
+#             background: rgba(249, 115, 22, 0.16) !important;
+#             color: #fed7aa !important;
+#             border-color: rgba(249, 115, 22, 0.35) !important;
+#         }
+#         </style>
+#         """
+#     )
 
 
 # ============================== FINAL THEME CONTRAST SYSTEM ==============================
@@ -2911,10 +2923,11 @@ else:
         "shadow": "0 18px 45px rgba(0,0,0,0.32)",
     }
 
-# Color blind mode changes semantic accents but keeps main buttons blue for consistency.
-if colorblind_mode:
-    _theme["primary"] = "#2563eb"
-    _theme["primary_2"] = "#0891b2"
+# COLORBLIND FEATURE DISABLED (commented out on request):
+# # Color blind mode changes semantic accents but keeps main buttons blue for consistency.
+# if colorblind_mode:
+#     _theme["primary"] = "#2563eb"
+#     _theme["primary_2"] = "#0891b2"
 
 render_html(
     f"""
@@ -3492,6 +3505,30 @@ render_html(
             max-height: 310px !important;
         }
     }
+
+    /* RESPONSIVE FIX: Streamlit's own columns never wrap on narrow windows - they
+       just keep shrinking, which used to squeeze the chat panel (and its nested
+       header/suggestion columns) down to a sliver, breaking words onto one
+       character per line. Give it a safe floor width on medium windows, and
+       fully stack the chat panel below the main content on narrow ones. */
+    .st-key-main_chat_row [data-testid="stHorizontalBlock"] {
+        flex-wrap: wrap !important;
+    }
+    .st-key-chat_panel {
+        min-width: 300px;
+    }
+
+    @media (max-width: 1100px) {
+        .st-key-main_chat_row [data-testid="stHorizontalBlock"] > [data-testid="column"] {
+            min-width: 100% !important;
+            flex: 1 1 100% !important;
+        }
+        .st-key-chat_panel, .st-key-chat_fab {
+            position: static !important;
+            margin-top: 1.25rem !important;
+            min-width: 0;
+        }
+    }
     </style>
     """
 )
@@ -3578,6 +3615,7 @@ def render_upload_flow() -> None:
                 st.session_state["cached_file_hash"] = file_hash
                 st.session_state["cached_language"] = language
                 st.session_state["cached_result"] = result
+                st.session_state.pop("cached_comparison", None)
                 status.update(label=T["status_done"], state="complete", expanded=False)
             except genai_errors.APIError as exc:
                 status.update(label=T["status_api_error"], state="error")
@@ -3617,14 +3655,19 @@ else:
     else:
         report_cache_key = f"report_{file_hash}_{language}"
         if report_cache_key not in st.session_state:
+            try:
+                report_pdf_bytes = build_pdf_report(result, T, valid_medicines, language)
+            except Exception:
+                report_pdf_bytes = None
             st.session_state[report_cache_key] = {
                 "text": build_text_report(result, T, valid_medicines, language),
-                "pdf": build_pdf_report(result, T, valid_medicines, language),
+                "pdf": report_pdf_bytes,
             }
         report_text = st.session_state[report_cache_key]["text"]
         report_pdf = st.session_state[report_cache_key]["pdf"]
 
-        main_col, chat_col = st.columns([7, 3])
+        with st.container(key="main_chat_row"):
+            main_col, chat_col = st.columns([7, 3])
 
         with main_col:
             header_col, pdf_col, print_col = st.columns([5, 2, 2])
@@ -3638,14 +3681,23 @@ else:
                     """
                 )
             with pdf_col:
-                st.download_button(
-                    T["download_pdf_button"],
-                    data=report_pdf,
-                    file_name="prescription_report.pdf",
-                    mime="application/pdf",
-                    use_container_width=True,
-                    key="download_pdf",
-                )
+                if report_pdf is not None:
+                    st.download_button(
+                        T["download_pdf_button"],
+                        data=report_pdf,
+                        file_name="prescription_report.pdf",
+                        mime="application/pdf",
+                        use_container_width=True,
+                        key="download_pdf",
+                    )
+                else:
+                    st.button(
+                        T["download_pdf_button"],
+                        disabled=True,
+                        use_container_width=True,
+                        key="download_pdf",
+                        help=T["pdf_generation_failed"],
+                    )
             with print_col:
                 print_button(T["print_button"])
 
@@ -4066,6 +4118,7 @@ else:
                                 st.session_state["cached_test_file_hash"] = test_file_hash
                                 st.session_state["cached_test_language"] = language
                                 st.session_state["cached_test_result"] = test_result
+                                st.session_state.pop("cached_comparison", None)
                                 status.update(label=T["status_done"], state="complete", expanded=False)
                             except genai_errors.APIError as exc:
                                 status.update(label=T["status_api_error"], state="error")
