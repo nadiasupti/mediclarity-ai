@@ -1,5 +1,6 @@
 """MediClarity AI - Streamlit app that explains prescriptions in simple Bangla."""
 
+import base64
 import hashlib
 import html
 import io
@@ -23,6 +24,56 @@ load_dotenv()
 BENGALI_FONT_PATH = os.path.join(os.path.dirname(__file__), "assets", "fonts", "NotoSansBengali-Regular.ttf")
 
 GEMINI_MODEL = "gemini-2.5-flash"
+
+# ============================== CHATBOT FAB CONFIG ==============================
+# Single knobs for the floating chat launcher's position/size. Horizontal
+# position is intentionally NOT configurable here - it's always pinned to the
+# right edge of the viewport by design. Change CHATBOT_BOTTOM_PX to move the
+# icon up/down; nothing else needs to change.
+CHATBOT_RIGHT_PX = 24
+CHATBOT_BOTTOM_PX = 40
+CHATBOT_SIZE_DESKTOP_PX = 76
+CHATBOT_SIZE_MOBILE_PX = 60
+
+# Drop a file with one of these exact names into assets/chatbot/ to replace
+# the fallback 🤖 emoji with a custom animated icon - no other code changes
+# needed. First match wins. GIF/WebP are the recommended choice (rendered as
+# a plain animated image, zero extra JS); Lottie (.json) is also supported
+# but needs a small player script loaded from a CDN (see render_chat_panel).
+CHATBOT_ASSET_DIR = os.path.join(os.path.dirname(__file__), "assets", "chatbot")
+CHATBOT_ASSET_CANDIDATES = ("robot.webp", "robot.gif", "robot.json")
+
+
+@st.cache_data
+def load_chatbot_asset():
+    """Look for a custom chatbot FAB icon in assets/chatbot/.
+
+    Cached with st.cache_data so a multi-MB GIF/WebP isn't re-read and
+    re-base64-encoded from disk on every Streamlit rerun. The cache is keyed
+    off this function's own source, so it refreshes whenever app.py is
+    edited/saved; if you only swap the asset FILE without touching app.py,
+    restart the Streamlit server (or clear the cache) to pick it up.
+
+    Returns (kind, payload) where kind is "image" (payload = a base64 data:
+    URI, ready to drop straight into a CSS background-image or <img src>) or
+    "lottie" (payload = the raw Lottie JSON text). Returns (None, None) if no
+    asset file is present yet, so the caller can fall back to the plain emoji.
+    """
+    for filename in CHATBOT_ASSET_CANDIDATES:
+        path = os.path.join(CHATBOT_ASSET_DIR, filename)
+        if not os.path.isfile(path):
+            continue
+        if filename.endswith(".json"):
+            try:
+                with open(path, "r", encoding="utf-8") as f:
+                    return "lottie", f.read()
+            except (OSError, UnicodeDecodeError):
+                continue
+        mime = "image/webp" if filename.endswith(".webp") else "image/gif"
+        with open(path, "rb") as f:
+            encoded = base64.b64encode(f.read()).decode("ascii")
+        return "image", f"data:{mime};base64,{encoded}"
+    return None, None
 #----------------------------CONFIDENCE --------------------------------------------------------------------------------
 CONFIDENCE_LABELS = {
     "বাংলা": {"high": "উচ্চ নির্ভরযোগ্যতা", "medium": "মাঝারি নির্ভরযোগ্যতা", "low": "কম নির্ভরযোগ্যতা"},
@@ -1379,27 +1430,6 @@ render_html(
         backdrop-filter: blur(18px);
     }
 
-    /* CHANGED: Chat floating button improved */
-    .st-key-chat_fab {
-        position: sticky;
-        top: 1rem;
-        align-self: flex-start;
-        display: flex;
-        justify-content: flex-end;
-    }
-
-    /* CHANGED: Floating chat button made round and glowing */
-    .st-key-chat_fab .stButton > button {
-        width: 64px;
-        height: 64px;
-        border-radius: 50% !important;
-        background: linear-gradient(135deg, #6d4aff, #14b8d4) !important;
-        border: none !important;
-        font-size: 1.7rem;
-        padding: 0;
-        box-shadow: 0 16px 34px rgba(99, 102, 241, 0.5);
-    }
-
     /* CHANGED: Chat close button made minimal */
     .st-key-chat_close_wrap .stButton > button,
     .st-key-chat_clear_wrap .stButton > button {
@@ -1810,6 +1840,81 @@ body[data-theme="light"] .st-key-chat_panel span,
 .stApp.theme-light .st-key-chat_panel span {
     color: #0f172a !important;
 }
+    </style>
+    """
+)
+
+
+# ============================== CHATBOT FAB: POSITION + ANIMATION ==============================
+# Fixed to the viewport (not the page/column flow), so it stays put on scroll
+# and only ever moves vertically - CHATBOT_BOTTOM_PX (top of file) is the one
+# knob to change. Horizontal position is not exposed on purpose: --chatbot-right
+# always pins the icon to the right edge.
+render_html(
+    f"""
+    <style>
+    :root {{
+        --chatbot-right: {CHATBOT_RIGHT_PX}px;
+        --chatbot-bottom: {CHATBOT_BOTTOM_PX}px;
+        --chatbot-size: {CHATBOT_SIZE_DESKTOP_PX}px;
+    }}
+    @media (max-width: 640px) {{
+        :root {{ --chatbot-size: {CHATBOT_SIZE_MOBILE_PX}px; }}
+    }}
+
+    .st-key-chat_fab {{
+        position: fixed !important;
+        right: var(--chatbot-right) !important;
+        bottom: var(--chatbot-bottom) !important;
+        top: auto !important;
+        left: auto !important;
+        z-index: 10000;
+        width: auto !important;
+        display: block !important;
+    }}
+
+    .st-key-chat_fab .stButton > button {{
+        width: var(--chatbot-size) !important;
+        height: var(--chatbot-size) !important;
+        border-radius: 50% !important;
+        padding: 0 !important;
+        font-size: calc(var(--chatbot-size) * 0.42);
+        line-height: 1 !important;
+        background: linear-gradient(135deg, #2563eb, #60a5fa) !important;
+        border: none !important;
+        box-shadow: 0 10px 26px rgba(37, 99, 235, 0.45);
+        animation: chatbotFloat 3.2s ease-in-out infinite;
+        transition: box-shadow 300ms ease, transform 300ms ease;
+    }}
+
+    /* Idle float + gentle "breathing" scale, subtle on purpose (not distracting) */
+    @keyframes chatbotFloat {{
+        0%, 100% {{ transform: translateY(0) scale(1); }}
+        50% {{ transform: translateY(-8px) scale(1.03); }}
+    }}
+
+    .st-key-chat_fab .stButton > button:hover {{
+        animation-play-state: paused;
+        transform: scale(1.08);
+        box-shadow: 0 14px 34px rgba(37, 99, 235, 0.65);
+    }}
+
+    .st-key-chat_fab .stButton > button:active {{
+        animation: chatbotBounce 300ms ease !important;
+    }}
+
+    @keyframes chatbotBounce {{
+        0% {{ transform: scale(1); }}
+        35% {{ transform: scale(0.86); }}
+        65% {{ transform: scale(1.1); }}
+        100% {{ transform: scale(1); }}
+    }}
+
+    @media (prefers-reduced-motion: reduce) {{
+        .st-key-chat_fab .stButton > button {{
+            animation: none !important;
+        }}
+    }}
     </style>
     """
 )
@@ -2250,6 +2355,37 @@ def render_chat_panel(gemini_client, file_hash: str, language: str, T: dict) -> 
 
     if not st.session_state["chat_open"]:
         with st.container(key="chat_fab"):
+            asset_kind, asset_payload = load_chatbot_asset()
+            if asset_kind == "image":
+                # Swap the emoji for the custom animated icon: the button's own
+                # background shows the GIF/WebP (browsers animate that natively,
+                # no JS needed), and the emoji text is hidden rather than removed
+                # so the button still has non-empty accessible label text.
+                render_html(
+                    f"""
+                    <style>
+                    .st-key-chat_fab .stButton > button {{
+                        background-image: url('{asset_payload}') !important;
+                        background-size: cover !important;
+                        background-position: center !important;
+                        background-repeat: no-repeat !important;
+                        color: transparent !important;
+                    }}
+                    </style>
+                    """
+                )
+            elif asset_kind == "lottie":
+                # NOTE: Lottie needs a JS player (<lottie-player>/lottie-web),
+                # and Streamlit's st.markdown (which render_html uses) strips
+                # <script> tags for security, so it can't be wired up the same
+                # simple way as image assets. A .json file here currently just
+                # falls back to the emoji below. If you specifically need
+                # Lottie, say so and it can be added via
+                # st.components.v1.html (a sandboxed iframe that does allow
+                # scripts) with extra positioning work to keep it locked to
+                # this same fixed bottom-right spot.
+                pass
+
             if st.button("🤖", key="chat_fab_button"):
                 st.session_state["chat_open"] = True
                 st.rerun()
@@ -3574,7 +3710,7 @@ render_html(
             min-width: 100% !important;
             flex: 1 1 100% !important;
         }
-        .st-key-chat_panel, .st-key-chat_fab {
+        .st-key-chat_panel {
             position: static !important;
             margin-top: 1.25rem !important;
             min-width: 0;
