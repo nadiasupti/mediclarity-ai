@@ -1023,6 +1023,11 @@ render_html(
         margin-bottom: 1.1rem;
         box-shadow: 0 18px 35px rgba(0,0,0,0.25);
         backdrop-filter: blur(18px);
+        /* Forces the same edge-to-edge width as the nav buttons below it -
+           without this, the card's own padding could sit "inside" its width
+           differently than the buttons' padding, making the two look misaligned. */
+        width: 100%;
+        box-sizing: border-box;
     }
 
     /* CHANGED: Sidebar logo circle redesigned with glowing gradient */
@@ -1062,8 +1067,27 @@ render_html(
     }
 
     /* CHANGED: Sidebar navigation buttons converted into dashboard pill buttons */
+    .st-key-sidebar_nav {
+        width: 100%;
+    }
+    /* Streamlit wraps a container's contents in its own nested block/element
+       divs, which can carry their own left/right padding - reset those to 0
+       so the button group's edges match the header card's full-width span. */
+    .st-key-sidebar_nav,
+    .st-key-sidebar_nav > div,
+    .st-key-sidebar_nav [data-testid="stVerticalBlock"],
+    .st-key-sidebar_nav [data-testid="element-container"] {
+        padding-left: 0 !important;
+        padding-right: 0 !important;
+        margin-left: 0 !important;
+        margin-right: 0 !important;
+    }
+    .st-key-sidebar_nav .stButton {
+        width: 100%;
+    }
     .st-key-sidebar_nav .stButton > button {
         width: 100%;
+        box-sizing: border-box;
         text-align: left;
         justify-content: flex-start;
         font-weight: 700;
@@ -2425,10 +2449,11 @@ with st.sidebar:
     )
     _T_nav = TRANSLATIONS[language]
 
-    # CHANGED: Added a real Dark/Light theme selector so the UI can switch modes from the sidebar.
-    appearance_mode = st.selectbox(
-        "🌓 Theme / থিম", ["Dark", "Light"], key="app_theme"
-    )
+    # LIGHT THEME DISABLED (commented out on request):
+    # appearance_mode = st.selectbox(
+    #     "🌓 Theme / থিম", ["Dark", "Light"], key="app_theme"
+    # )
+    appearance_mode = "Dark"
 
     elderly_mode = st.toggle("🧓 বড় ফন্ট মোড (Elderly Mode)", key="elderly_mode")
 
@@ -2531,21 +2556,47 @@ render_html(
         backdrop-filter: blur(14px);
     }
 
+    /* Taller variant for the condition/purpose cards, so the longer AI text
+       has room to breathe and the stat-badge chip doesn't get cramped. */
+    .overview-card-tall {
+        min-height: 230px;
+        display: flex;
+        flex-direction: column;
+    }
+
     .overview-label {
-        font-size: 0.78rem;
+        font-size: 1.05rem;
         color: #aebbd0;
         margin-bottom: 0.5rem;
-        font-weight: 700;
+        font-weight: 900;
     }
 
     .overview-value {
         font-size: 0.98rem;
         line-height: 1.48;
-        font-weight: 800;
+        font-weight: 400;
         color: #f8fafc;
         max-height: 105px;
         overflow-y: auto;
         padding-right: 4px;
+    }
+
+    .overview-card-tall .overview-value {
+        max-height: 160px;
+        flex: 1 1 auto;
+    }
+
+    /* The stat-badge chip only had styling scoped under .stat-card - inside
+       .overview-card it was rendering as an unrounded, unpadded plain block. */
+    .overview-card .stat-badge {
+        display: inline-block;
+        margin-top: 10px;
+        font-size: 0.72rem;
+        background: rgba(20, 184, 212, 0.16);
+        color: #67e8f9;
+        padding: 2px 9px;
+        border-radius: 9999px;
+        border: 1px solid rgba(103, 232, 249, 0.18);
     }
 
     .overview-big-number {
@@ -2600,225 +2651,226 @@ render_html(
     """
 )
 
-# CHANGED: Light mode override. This is intentionally placed AFTER sidebar controls,
-# so changing the Theme selectbox reruns the app and updates the full UI immediately.
-if appearance_mode == "Light":
-    render_html(
-        """
-        <style>
-
-        .stApp {
-            background:
-                radial-gradient(circle at top left, rgba(99, 102, 241, 0.14), transparent 34%),
-                radial-gradient(circle at top right, rgba(20, 184, 212, 0.12), transparent 30%),
-                linear-gradient(135deg, #f8fafc 0%, #eef6ff 48%, #f8fafc 100%) !important;
-            color: #0f172a !important;
-        }
-        [data-testid="stHeader"] {
-            background: rgba(248, 250, 252, 0.75) !important;
-            backdrop-filter: blur(14px);
-        }
-        [data-testid="stSidebar"] > div:first-child {
-            background: linear-gradient(180deg, #eef2ff 0%, #e0f2fe 48%, #f8fafc 100%) !important;
-            border-right: 1px solid rgba(15, 23, 42, 0.10) !important;
-            box-shadow: 10px 0 35px rgba(15,23,42,0.10) !important;
-        }
-        [data-testid="stSidebar"] h1,
-        [data-testid="stSidebar"] h2,
-        [data-testid="stSidebar"] h3,
-        [data-testid="stSidebar"] p,
-        [data-testid="stSidebar"] label,
-        [data-testid="stSidebar"] span,
-        .stApp p, .stApp li, .stApp label, .stApp span {
-            color: #0f172a !important;
-        }
-        h1, h2, h3, h4 { color: #0f172a !important; }
-        .sidebar-header-card, .card, .summary-hero-card, .overview-card, .stat-card,
-        .st-key-schedule_outer_card, .st-key-timeline_outer_card {
-            background: rgba(255, 255, 255, 0.82) !important;
-            border-color: rgba(15, 23, 42, 0.10) !important;
-            color: #0f172a !important;
-            box-shadow: 0 18px 45px rgba(15,23,42,0.10) !important;
-        }
-        .sidebar-header-title, .sidebar-header-tagline, .sidebar-header-desc,
-        .card h3, .card p, .card strong, .card li,
-        .welcome-header h2, .overview-value, .overview-big-number, .stat-card .stat-value {
-            color: #0f172a !important;
-        }
-        .welcome-header p, .overview-label, .stat-card .stat-label, .app-footer {
-            color: #475569 !important;
-        }
-        .patient-chip {
-            background: rgba(15, 23, 42, 0.05) !important;
-            border-color: rgba(15, 23, 42, 0.10) !important;
-            color: #0f172a !important;
-        }
-        .st-key-sidebar_nav .stButton > button[kind="secondary"] {
-            background: rgba(15, 23, 42, 0.04) !important;
-            border-color: rgba(15, 23, 42, 0.08) !important;
-            color: #1e293b !important;
-        }
-        .st-key-sidebar_nav .stButton > button[kind="secondary"]:hover {
-            background: rgba(99, 102, 241, 0.12) !important;
-            color: #111827 !important;
-        }
-        table { border-color: rgba(15,23,42,0.10) !important; }
-        thead tr th {
-            background: rgba(99, 102, 241, 0.12) !important;
-            color: #0f172a !important;
-        }
-        tbody tr td {
-            background: rgba(255, 255, 255, 0.72) !important;
-            color: #0f172a !important;
-        }
-        [data-testid="stFileUploader"], .stAlert {
-            background: rgba(255,255,255,0.82) !important;
-            border-color: rgba(99,102,241,0.26) !important;
-            color: #0f172a !important;
-        }
-        input, textarea, select {
-            background: rgba(255, 255, 255, 0.95) !important;
-            color: #0f172a !important;
-            border: 1px solid rgba(15,23,42,0.12) !important;
-        }
-        .st-key-chat_panel {
-            background: linear-gradient(180deg, rgba(255,255,255,0.96), rgba(239,246,255,0.96)) !important;
-            border-color: rgba(99,102,241,0.32) !important;
-            box-shadow: 0 20px 45px rgba(15,23,42,0.12) !important;
-        }
-        .chat-header-title, .chat-header-subtitle { color: #0f172a !important; }
-        .bubble-assistant {
-            background: rgba(226, 232, 240, 0.78) !important;
-            color: #0f172a !important;
-            border-color: rgba(15,23,42,0.08) !important;
-        }
-        .bubble-user, .bubble-user * { color: white !important; }
-        .risk-pill {
-            background: rgba(22, 163, 74, 0.10) !important;
-            color: #166534 !important;
-            border-color: rgba(22, 163, 74, 0.20) !important;
-        }
-        .risk-pill.high-risk {
-            background: rgba(220, 38, 38, 0.10) !important;
-            color: #991b1b !important;
-            border-color: rgba(220, 38, 38, 0.22) !important;
-        }
-        /* FINAL FIX: Light mode chat panel readability */
-/* This does not depend on .theme-light class */
-
-/* Chat panel container */
-.st-key-chat_panel {
-    background: #ffffff !important;
-    border: 1px solid #dbe3ef !important;
-}
-
-/* Chat header */
-.st-key-chat_panel .chat-header-title,
-.st-key-chat_panel .chat-header-subtitle {
-    color: #0f172a !important;
-}
-
-/* Assistant message bubble */
-.st-key-chat_panel .bubble-assistant,
-.st-key-chat_panel .bubble-assistant *,
-.st-key-chat_panel .bubble-assistant p,
-.st-key-chat_panel .bubble-assistant span,
-.st-key-chat_panel .bubble-assistant div {
-    background: #eef4fb !important;
-    color: #0f172a !important;
-}
-
-/* User message bubble */
-.st-key-chat_panel .bubble-user,
-.st-key-chat_panel .bubble-user *,
-.st-key-chat_panel .bubble-user p,
-.st-key-chat_panel .bubble-user span,
-.st-key-chat_panel .bubble-user div {
-    color: #ffffff !important;
-}
-
-/* Chat timestamps */
-.st-key-chat_panel .bubble-time {
-    color: #64748b !important;
-}
-
-/* Suggested question buttons */
-.st-key-chat_suggestions .stButton > button,
-.st-key-chat_suggestions .stButton > button *,
-.st-key-chat_suggestions button,
-.st-key-chat_suggestions button * {
-    background: #ffffff !important;
-    color: #0f172a !important;
-    border-color: #e7c76a !important;
-}
-
-/* Chat input area */
-[data-testid="stChatInput"],
-[data-testid="stChatInput"] *,
-[data-testid="stChatInput"] textarea,
-[data-testid="stChatInput"] input {
-    background: #ffffff !important;
-    color: #0f172a !important;
-}
-
-/* Chat input placeholder */
-[data-testid="stChatInput"] textarea::placeholder,
-[data-testid="stChatInput"] input::placeholder {
-    color: #64748b !important;
-    opacity: 1 !important;
-}
-
-/* Dark input wrapper inside Streamlit chat */
-[data-testid="stChatInput"] div {
-    background: #ffffff !important;
-    color: #0f172a !important;
-    border-color: #cbd5e1 !important;
-}
-
-/* Send button area */
-[data-testid="stChatInput"] button,
-[data-testid="stChatInput"] button * {
-    color: #ffffff !important;
-}
-
-        /* FINAL PATCH: Light mode clear/close chat action buttons */
-        .st-key-chat_clear_wrap .stButton > button,
-        .st-key-chat_close_wrap .stButton > button {
-            background: #f8fafc !important;
-            color: #334155 !important;
-            border: 1px solid #cbd5e1 !important;
-            border-radius: 999px !important;
-            width: 34px !important;
-            height: 34px !important;
-            min-height: 34px !important;
-            padding: 0 !important;
-            display: inline-flex !important;
-            align-items: center !important;
-            justify-content: center !important;
-            box-shadow: 0 6px 14px rgba(15, 23, 42, 0.08) !important;
-        }
-
-        .st-key-chat_clear_wrap .stButton > button:hover,
-        .st-key-chat_close_wrap .stButton > button:hover {
-            background: #e0f2fe !important;
-            color: #0f172a !important;
-            border-color: #38bdf8 !important;
-            transform: none !important;
-            box-shadow: 0 8px 18px rgba(14, 165, 233, 0.18) !important;
-        }
-
-        .st-key-chat_clear_wrap .stButton > button *,
-        .st-key-chat_close_wrap .stButton > button * {
-            color: #334155 !important;
-        }
-
-        .st-key-chat_clear_wrap .stButton > button:hover *,
-        .st-key-chat_close_wrap .stButton > button:hover * {
-            color: #0f172a !important;
-        }
-        </style>
-        """
-    )
+# LIGHT THEME DISABLED (commented out on request):
+# # CHANGED: Light mode override. This is intentionally placed AFTER sidebar controls,
+# # so changing the Theme selectbox reruns the app and updates the full UI immediately.
+# if appearance_mode == "Light":
+#     render_html(
+#         """
+#         <style>
+# 
+#         .stApp {
+#             background:
+#                 radial-gradient(circle at top left, rgba(99, 102, 241, 0.14), transparent 34%),
+#                 radial-gradient(circle at top right, rgba(20, 184, 212, 0.12), transparent 30%),
+#                 linear-gradient(135deg, #f8fafc 0%, #eef6ff 48%, #f8fafc 100%) !important;
+#             color: #0f172a !important;
+#         }
+#         [data-testid="stHeader"] {
+#             background: rgba(248, 250, 252, 0.75) !important;
+#             backdrop-filter: blur(14px);
+#         }
+#         [data-testid="stSidebar"] > div:first-child {
+#             background: linear-gradient(180deg, #eef2ff 0%, #e0f2fe 48%, #f8fafc 100%) !important;
+#             border-right: 1px solid rgba(15, 23, 42, 0.10) !important;
+#             box-shadow: 10px 0 35px rgba(15,23,42,0.10) !important;
+#         }
+#         [data-testid="stSidebar"] h1,
+#         [data-testid="stSidebar"] h2,
+#         [data-testid="stSidebar"] h3,
+#         [data-testid="stSidebar"] p,
+#         [data-testid="stSidebar"] label,
+#         [data-testid="stSidebar"] span,
+#         .stApp p, .stApp li, .stApp label, .stApp span {
+#             color: #0f172a !important;
+#         }
+#         h1, h2, h3, h4 { color: #0f172a !important; }
+#         .sidebar-header-card, .card, .summary-hero-card, .overview-card, .stat-card,
+#         .st-key-schedule_outer_card, .st-key-timeline_outer_card {
+#             background: rgba(255, 255, 255, 0.82) !important;
+#             border-color: rgba(15, 23, 42, 0.10) !important;
+#             color: #0f172a !important;
+#             box-shadow: 0 18px 45px rgba(15,23,42,0.10) !important;
+#         }
+#         .sidebar-header-title, .sidebar-header-tagline, .sidebar-header-desc,
+#         .card h3, .card p, .card strong, .card li,
+#         .welcome-header h2, .overview-value, .overview-big-number, .stat-card .stat-value {
+#             color: #0f172a !important;
+#         }
+#         .welcome-header p, .overview-label, .stat-card .stat-label, .app-footer {
+#             color: #475569 !important;
+#         }
+#         .patient-chip {
+#             background: rgba(15, 23, 42, 0.05) !important;
+#             border-color: rgba(15, 23, 42, 0.10) !important;
+#             color: #0f172a !important;
+#         }
+#         .st-key-sidebar_nav .stButton > button[kind="secondary"] {
+#             background: rgba(15, 23, 42, 0.04) !important;
+#             border-color: rgba(15, 23, 42, 0.08) !important;
+#             color: #1e293b !important;
+#         }
+#         .st-key-sidebar_nav .stButton > button[kind="secondary"]:hover {
+#             background: rgba(99, 102, 241, 0.12) !important;
+#             color: #111827 !important;
+#         }
+#         table { border-color: rgba(15,23,42,0.10) !important; }
+#         thead tr th {
+#             background: rgba(99, 102, 241, 0.12) !important;
+#             color: #0f172a !important;
+#         }
+#         tbody tr td {
+#             background: rgba(255, 255, 255, 0.72) !important;
+#             color: #0f172a !important;
+#         }
+#         [data-testid="stFileUploader"], .stAlert {
+#             background: rgba(255,255,255,0.82) !important;
+#             border-color: rgba(99,102,241,0.26) !important;
+#             color: #0f172a !important;
+#         }
+#         input, textarea, select {
+#             background: rgba(255, 255, 255, 0.95) !important;
+#             color: #0f172a !important;
+#             border: 1px solid rgba(15,23,42,0.12) !important;
+#         }
+#         .st-key-chat_panel {
+#             background: linear-gradient(180deg, rgba(255,255,255,0.96), rgba(239,246,255,0.96)) !important;
+#             border-color: rgba(99,102,241,0.32) !important;
+#             box-shadow: 0 20px 45px rgba(15,23,42,0.12) !important;
+#         }
+#         .chat-header-title, .chat-header-subtitle { color: #0f172a !important; }
+#         .bubble-assistant {
+#             background: rgba(226, 232, 240, 0.78) !important;
+#             color: #0f172a !important;
+#             border-color: rgba(15,23,42,0.08) !important;
+#         }
+#         .bubble-user, .bubble-user * { color: white !important; }
+#         .risk-pill {
+#             background: rgba(22, 163, 74, 0.10) !important;
+#             color: #166534 !important;
+#             border-color: rgba(22, 163, 74, 0.20) !important;
+#         }
+#         .risk-pill.high-risk {
+#             background: rgba(220, 38, 38, 0.10) !important;
+#             color: #991b1b !important;
+#             border-color: rgba(220, 38, 38, 0.22) !important;
+#         }
+#         /* FINAL FIX: Light mode chat panel readability */
+# /* This does not depend on .theme-light class */
+# 
+# /* Chat panel container */
+# .st-key-chat_panel {
+#     background: #ffffff !important;
+#     border: 1px solid #dbe3ef !important;
+# }
+# 
+# /* Chat header */
+# .st-key-chat_panel .chat-header-title,
+# .st-key-chat_panel .chat-header-subtitle {
+#     color: #0f172a !important;
+# }
+# 
+# /* Assistant message bubble */
+# .st-key-chat_panel .bubble-assistant,
+# .st-key-chat_panel .bubble-assistant *,
+# .st-key-chat_panel .bubble-assistant p,
+# .st-key-chat_panel .bubble-assistant span,
+# .st-key-chat_panel .bubble-assistant div {
+#     background: #eef4fb !important;
+#     color: #0f172a !important;
+# }
+# 
+# /* User message bubble */
+# .st-key-chat_panel .bubble-user,
+# .st-key-chat_panel .bubble-user *,
+# .st-key-chat_panel .bubble-user p,
+# .st-key-chat_panel .bubble-user span,
+# .st-key-chat_panel .bubble-user div {
+#     color: #ffffff !important;
+# }
+# 
+# /* Chat timestamps */
+# .st-key-chat_panel .bubble-time {
+#     color: #64748b !important;
+# }
+# 
+# /* Suggested question buttons */
+# .st-key-chat_suggestions .stButton > button,
+# .st-key-chat_suggestions .stButton > button *,
+# .st-key-chat_suggestions button,
+# .st-key-chat_suggestions button * {
+#     background: #ffffff !important;
+#     color: #0f172a !important;
+#     border-color: #e7c76a !important;
+# }
+# 
+# /* Chat input area */
+# [data-testid="stChatInput"],
+# [data-testid="stChatInput"] *,
+# [data-testid="stChatInput"] textarea,
+# [data-testid="stChatInput"] input {
+#     background: #ffffff !important;
+#     color: #0f172a !important;
+# }
+# 
+# /* Chat input placeholder */
+# [data-testid="stChatInput"] textarea::placeholder,
+# [data-testid="stChatInput"] input::placeholder {
+#     color: #64748b !important;
+#     opacity: 1 !important;
+# }
+# 
+# /* Dark input wrapper inside Streamlit chat */
+# [data-testid="stChatInput"] div {
+#     background: #ffffff !important;
+#     color: #0f172a !important;
+#     border-color: #cbd5e1 !important;
+# }
+# 
+# /* Send button area */
+# [data-testid="stChatInput"] button,
+# [data-testid="stChatInput"] button * {
+#     color: #ffffff !important;
+# }
+# 
+#         /* FINAL PATCH: Light mode clear/close chat action buttons */
+#         .st-key-chat_clear_wrap .stButton > button,
+#         .st-key-chat_close_wrap .stButton > button {
+#             background: #f8fafc !important;
+#             color: #334155 !important;
+#             border: 1px solid #cbd5e1 !important;
+#             border-radius: 999px !important;
+#             width: 34px !important;
+#             height: 34px !important;
+#             min-height: 34px !important;
+#             padding: 0 !important;
+#             display: inline-flex !important;
+#             align-items: center !important;
+#             justify-content: center !important;
+#             box-shadow: 0 6px 14px rgba(15, 23, 42, 0.08) !important;
+#         }
+# 
+#         .st-key-chat_clear_wrap .stButton > button:hover,
+#         .st-key-chat_close_wrap .stButton > button:hover {
+#             background: #e0f2fe !important;
+#             color: #0f172a !important;
+#             border-color: #38bdf8 !important;
+#             transform: none !important;
+#             box-shadow: 0 8px 18px rgba(14, 165, 233, 0.18) !important;
+#         }
+# 
+#         .st-key-chat_clear_wrap .stButton > button *,
+#         .st-key-chat_close_wrap .stButton > button * {
+#             color: #334155 !important;
+#         }
+# 
+#         .st-key-chat_clear_wrap .stButton > button:hover *,
+#         .st-key-chat_close_wrap .stButton > button:hover * {
+#             color: #0f172a !important;
+#         }
+#         </style>
+#         """
+#     )
 
 # COLORBLIND FEATURE DISABLED (commented out on request):
 # # CHANGED: Color Blind global override. It avoids relying on red/green as the main app accent.
@@ -3046,8 +3098,7 @@ render_html(
         color: var(--mc-muted) !important;
     }}
 
-    .patient-chip, .stat-badge, .ongoing-badge,
-    .summary-hero-card span:not(.beta-badge) {{
+    .patient-chip, .stat-badge, .ongoing-badge {{
         background: var(--mc-chip-bg) !important;
         color: var(--mc-chip-text) !important;
         border: 1px solid var(--mc-border) !important;
@@ -3566,7 +3617,11 @@ def render_upload_flow() -> None:
                 f"<p style='text-align:center;'><strong>{step_title}</strong></p>",
                 unsafe_allow_html=True,
             )
-            st.caption(step_desc)
+            st.markdown(
+                f"<p style='text-align:center; color:var(--mc-muted, #94a3b8); "
+                f"font-size:0.85rem;'>{html.escape(step_desc)}</p>",
+                unsafe_allow_html=True,
+            )
 
     st.divider()
 
@@ -3722,7 +3777,7 @@ else:
                     html.escape(str(c)) for c in result.get("detected_conditions", []) if str(c).strip()
                 ]
                 condition_chips = "".join(
-                    f'<span style="background-color:#1e3a5f; color:#93c5fd; padding:2px 10px; '
+                    f'<span style="background-color:#1e3a5f !important; color:#93c5fd !important; padding:2px 10px; '
                     f'border-radius:9999px; font-size:0.75rem; font-weight:600; margin-right:6px; '
                     f'display:inline-block; margin-top:4px;">🏷️ {c}</span>'
                     for c in detected_conditions
@@ -3737,7 +3792,7 @@ else:
                 render_html(
                     f"""
                     <div class="result-status-card">
-                        <div><strong>✅ {T['status_done']}</strong> — {len(valid_medicines)} {T['success_suffix'].strip()}</div>
+                        <div><strong>{T['status_done']}</strong> — {len(valid_medicines)} {T['success_suffix'].strip()}</div>
                         <div style="font-size:0.82rem; opacity:0.85;">MediClarity AI</div>
                     </div>
                     """
@@ -3748,7 +3803,7 @@ else:
                     f"""
                     <div class="summary-hero-card">
                         <h3>{T['summary_title']}
-                            <span style="background-color:{oc_bg}; color:{oc_fg};
+                            <span style="background-color:{oc_bg} !important; color:{oc_fg} !important;
                                 padding:3px 11px; border-radius:9999px; font-size:0.75rem;
                                 font-weight:800; vertical-align:middle; margin-left:6px;">
                                 {T['summary_overall']} {oc_label}
@@ -3798,12 +3853,12 @@ else:
                 render_html(
                     f"""
                     <div class="overview-grid">
-                        <div class="overview-card">
+                        <div class="overview-card overview-card-tall">
                             <div class="overview-label">{T['stat_condition_label']}</div>
                             <div class="overview-value">{probable_condition}</div>
                             <div class="stat-badge">{T['ai_inference_badge']}</div>
                         </div>
-                        <div class="overview-card">
+                        <div class="overview-card overview-card-tall">
                             <div class="overview-label">{T['stat_purpose_label']}</div>
                             <div class="overview-value">{treatment_purpose}</div>
                             <div class="stat-badge">{T['ai_analysis_badge']}</div>
@@ -3817,7 +3872,6 @@ else:
                         </div>
                         <div class="overview-card">
                             <div class="overview-label">{T['stat_risk_label']}</div>
-                            <div class="overview-big-number">{risk_value}</div>
                             <div class="risk-pill {risk_class}">{'⚠️' if has_high_risk else '✅'} {risk_value}</div>
                         </div>
                     </div>
@@ -3850,7 +3904,7 @@ else:
                         </div>
                         """
                     )
-
+#==================================== medicines page ========================================
             elif nav_page == "medicines":
                 st.subheader(T["details_title"])
                 card_cols = st.columns(2)
@@ -3866,7 +3920,7 @@ else:
                         confidence_key, CONFIDENCE_BADGES["low"]
                     )
                     high_risk_badge = (
-                        f'<span style="background-color:{DANGER_COLORS["bg"]}; color:{DANGER_COLORS["text"]}; '
+                        f'<span style="background-color:{DANGER_COLORS["bg"]} !important; color:{DANGER_COLORS["text"]} !important; '
                         f'padding:2px 10px; border-radius:9999px; font-size:0.75rem; font-weight:600; '
                         f'vertical-align:middle;">{T["high_risk_badge"]}</span>'
                         if as_bool(med.get("high_risk"))
@@ -3877,7 +3931,7 @@ else:
                             f"""
                             <div class="card">
                                 <h3>🩺 {name}
-                                    <span style="background-color:{confidence_bg}; color:{confidence_fg};
+                                    <span style="background-color:{confidence_bg} !important; color:{confidence_fg} !important;
                                         padding:2px 10px; border-radius:9999px; font-size:0.75rem;
                                         font-weight:600; vertical-align:middle;">
                                         {confidence_label}
@@ -3892,6 +3946,7 @@ else:
                             </div>
                             """
                         )
+#==================================== schedule page ========================================
 
             elif nav_page == "schedule":
                 with st.container(key="schedule_outer_card"):
@@ -4004,7 +4059,9 @@ else:
                             )
 
                             with slot_col:
-                                render_timeline_slot_card(slot_icon, slot_label, slot_bg_class, items_html)
+                                render_timeline_slot_card(
+                                    slot_icon, strip_emoji(slot_label), slot_bg_class, items_html
+                                )
 
                     # CHANGED: Render Day 1-5, 6-10, 11-15, 16-20, 21-30.
                     for tab, day_range in zip(tabs[:5], day_ranges):
@@ -4175,7 +4232,7 @@ else:
                                 f"""
                                 <div class="card">
                                     <h3>{T['test_summary_title']}
-                                        <span style="background-color:{test_oc_bg}; color:{test_oc_fg};
+                                        <span style="background-color:{test_oc_bg} !important; color:{test_oc_fg} !important;
                                             padding:2px 10px; border-radius:9999px; font-size:0.75rem;
                                             font-weight:600; vertical-align:middle;">
                                             {T['summary_overall']} {test_oc_label}
@@ -4230,7 +4287,7 @@ else:
                                         f"""
                                         <div class="card">
                                             <h3>🔬 {test_name}
-                                                <span style="background-color:{test_status_bg}; color:{test_status_fg};
+                                                <span style="background-color:{test_status_bg} !important; color:{test_status_fg} !important;
                                                     padding:2px 10px; border-radius:9999px; font-size:0.75rem;
                                                     font-weight:600; vertical-align:middle;">
                                                     {test_status_label}
