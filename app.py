@@ -90,41 +90,42 @@ def parse_duration_days(med: dict):
         return None
     return days if days > 0 else None
 
-
 def build_treatment_timeline(valid_medicines: list) -> list:
-    """Group each medicine's active days into day-ranges with a stable set of
-    medicines, so a 28-day medicine doesn't produce 28 near-identical blocks.
+    # CHANGED: Timeline now uses fixed demo-friendly tabs like Day 1-5, 6-10, 11-15, 16-20, 21-30.
+    # CHANGED: This matches the premium dashboard screenshot style instead of creating random duration-based tabs.
 
-    A medicine with no determinable duration is treated as active for the
-    whole visible timeline (marked "ongoing"), since assuming it stops at an
-    arbitrary day would be misleading; if not a single medicine has a known
-    duration, the timeline is just 1 day (there's no basis to extend further).
-    """
-    known_days = [
-        parse_duration_days(med) for med in valid_medicines if parse_duration_days(med) is not None
+    fixed_ranges = [
+        (1, 5),
+        (6, 10),
+        (11, 15),
+        (16, 20),
+        (21, 30),
     ]
-    max_days = max(known_days) if known_days else 1
-
-    day_snapshots = []
-    for day in range(1, max_days + 1):
-        active = []
-        for med in valid_medicines:
-            duration_days = parse_duration_days(med)
-            if duration_days is None or day <= duration_days:
-                active.append(med)
-        signature = tuple(sorted(str(med.get("medicine_name", "")) for med in active))
-        day_snapshots.append((day, signature, active))
 
     ranges = []
-    i = 0
-    while i < len(day_snapshots):
-        start_day, signature, active = day_snapshots[i]
-        j = i
-        while j + 1 < len(day_snapshots) and day_snapshots[j + 1][1] == signature:
-            j += 1
-        end_day = day_snapshots[j][0]
-        ranges.append({"start_day": start_day, "end_day": end_day, "medicines": active})
-        i = j + 1
+
+    for start_day, end_day in fixed_ranges:
+        active_meds = []
+
+        for med in valid_medicines:
+            duration_days = parse_duration_days(med)
+
+            # CHANGED: If duration is unknown, show medicine in all timeline ranges as ongoing.
+            if duration_days is None:
+                active_meds.append(med)
+
+            # CHANGED: If medicine duration overlaps with this range, show it in this tab.
+            elif duration_days >= start_day:
+                active_meds.append(med)
+
+        ranges.append(
+            {
+                "start_day": start_day,
+                "end_day": end_day,
+                "medicines": active_meds,
+            }
+        )
+
     return ranges
 
 
@@ -931,143 +932,424 @@ st.set_page_config(
 
 render_html(
     """
-    <link href="https://fonts.googleapis.com/css2?family=Hind+Siliguri:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <!-- CHANGED: Imported stronger Bangla font weights for a premium dashboard look -->
+    <link href="https://fonts.googleapis.com/css2?family=Hind+Siliguri:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+
     <style>
+    /* CHANGED: Added global theme variables so every UI element uses one consistent color system */
+    :root {
+        --bg-main: #07111f;
+        --bg-deep: #050914;
+        --card-bg: rgba(15, 30, 52, 0.78);
+        --card-bg-strong: rgba(22, 39, 70, 0.92);
+        --sidebar-gradient: linear-gradient(180deg, #35208f 0%, #1b2450 45%, #0a1020 100%);
+        --primary: #6d4aff;
+        --primary-soft: #8b6cff;
+        --cyan: #14b8d4;
+        --text-main: #f8fafc;
+        --text-muted: #b6c2d6;
+        --border-soft: rgba(148, 163, 184, 0.18);
+        --shadow-card: 0 18px 45px rgba(0, 0, 0, 0.32);
+    }
+
+    /* CHANGED: Applied Bangla-friendly font and default readable text color */
+    html, body, .stApp {
+        font-family: 'Hind Siliguri', 'Segoe UI', sans-serif !important;
+        color: var(--text-main);
+    }
+
+    /* CHANGED: Replaced flat dark background with premium navy radial gradient */
     .stApp {
-        font-family: 'Hind Siliguri', sans-serif;
+        background:
+            radial-gradient(circle at top left, rgba(109, 74, 255, 0.24), transparent 34%),
+            radial-gradient(circle at top right, rgba(20, 184, 212, 0.16), transparent 30%),
+            linear-gradient(135deg, #07111f 0%, #081629 45%, #050914 100%);
     }
-    .main { background-color: #0f172a; }
-    .stButton>button {
-        background-color: #3b82f6;
-        color: white;
-        border-radius: 8px;
-        padding: 0.5rem 1.5rem;
-        border: none;
+
+    /* CHANGED: Streamlit top header made transparent and glassy */
+    [data-testid="stHeader"] {
+        background: rgba(7, 17, 31, 0.55);
+        backdrop-filter: blur(14px);
     }
-    .stButton>button:hover { background-color: #2563eb; }
-    .hero-banner {
-        background: linear-gradient(135deg, #3b82f6, #1e3a8a);
-        border-radius: 16px;
-        padding: 2rem 1.5rem;
-        margin-bottom: 1.5rem;
-        text-align: center;
-        box-shadow: 0 8px 20px rgba(59, 130, 246, 0.25);
+
+    /* CHANGED: Main content spacing adjusted to match dashboard layout */
+    .main .block-container {
+        padding-top: 2rem;
+        padding-left: 2rem;
+        padding-right: 2rem;
+        max-width: 1500px;
     }
-    .hero-banner .hero-icon { font-size: 2.5rem; }
-    .hero-banner h1 {
-        color: white;
-        margin: 0.25rem 0 0.4rem 0;
-        font-size: 1.9rem;
+
+    /* CHANGED: Heading colors fixed for dark premium UI */
+    h1, h2, h3, h4 {
+        color: var(--text-main) !important;
+        letter-spacing: -0.02em;
     }
-    .hero-banner p {
-        color: #dbeafe;
-        margin: 0;
-        font-size: 1rem;
+
+    /* CHANGED: Body text contrast improved */
+    p, li, label, span {
+        color: #dbe4f0;
     }
-    .card {
-        background-color: #1e293b;
-        border: 1px solid #334155;
-        border-radius: 12px;
-        padding: 1.25rem 1.5rem;
-        margin-bottom: 1rem;
-        box-shadow: 0 1px 3px rgba(0,0,0,0.35);
-        color: #e2e8f0;
+
+    /* CHANGED: Sidebar turned into purple-blue gradient like the target design */
+    [data-testid="stSidebar"] > div:first-child {
+        background: var(--sidebar-gradient);
+        border-right: 1px solid rgba(255,255,255,0.08);
+        box-shadow: 10px 0 35px rgba(0,0,0,0.28);
     }
-    .card h3, .card p, .card strong {
-        color: #e2e8f0;
+
+    /* CHANGED: Sidebar text forced to light color for readability */
+    [data-testid="stSidebar"] h1,
+    [data-testid="stSidebar"] h2,
+    [data-testid="stSidebar"] h3,
+    [data-testid="stSidebar"] p,
+    [data-testid="stSidebar"] label,
+    [data-testid="stSidebar"] span {
+        color: #f8fafc !important;
     }
-    /* Outer section wrapper: a slightly darker box that groups a whole section
-       (table + tabs + inner .card boxes) so it reads as one nested box-in-box
-       card, instead of loose widgets floating directly on the page background. */
-    .st-key-schedule_outer_card, .st-key-timeline_outer_card {
-        background-color: #161b2e;
-        border: 1px solid #334155;
-        border-radius: 16px;
-        padding: 1.25rem 1.5rem 1.5rem 1.5rem;
-    }
-    .app-footer {
-        text-align: center;
-        color: #94a3b8;
-        font-size: 0.85rem;
-        padding: 1rem 0 0.5rem 0;
-    }
-    .welcome-header h2 { margin-bottom: 0.1rem; }
-    .welcome-header p { color: #94a3b8; margin-top: 0; }
-    .stat-card {
-        background-color: #1e293b;
-        border: 1px solid #334155;
-        border-radius: 12px;
-        padding: 1rem 1.1rem;
-        height: 100%;
-    }
-    .stat-card .stat-label { font-size: 0.8rem; color: #94a3b8; margin-bottom: 4px; }
-    .stat-card .stat-value { font-size: 1.05rem; font-weight: 700; color: #e2e8f0; }
-    .stat-card .stat-badge {
-        display: inline-block; margin-top: 6px; font-size: 0.7rem;
-        background-color: #1e3a5f; color: #93c5fd; padding: 1px 8px; border-radius: 9999px;
-    }
-    .stat-progress-track {
-        background-color: #334155; border-radius: 9999px; height: 8px; margin-top: 8px; overflow: hidden;
-    }
-    .stat-progress-fill {
-        background: linear-gradient(90deg, #3b82f6, #8b5cf6); height: 100%;
-    }
-    /* Sidebar nav pill buttons */
+
+    /* CHANGED: Sidebar header card upgraded to glassmorphism style */
     .sidebar-header-card {
-        background: linear-gradient(160deg, #1e1b4b, #1e293b);
-        border: 1px solid #312e81;
-        border-radius: 14px;
-        padding: 1rem;
-        margin-bottom: 1rem;
+        background: rgba(255, 255, 255, 0.07);
+        border: 1px solid rgba(255, 255, 255, 0.12);
+        border-radius: 22px;
+        padding: 1.15rem;
+        margin-bottom: 1.1rem;
+        box-shadow: 0 18px 35px rgba(0,0,0,0.25);
+        backdrop-filter: blur(18px);
     }
+
+    /* CHANGED: Sidebar logo circle redesigned with glowing gradient */
     .sidebar-logo-circle {
-        width: 44px; height: 44px; border-radius: 50%;
-        background: linear-gradient(135deg, #6366f1, #a855f7);
-        display: flex; align-items: center; justify-content: center;
-        font-size: 1.35rem; flex-shrink: 0;
+        width: 54px;
+        height: 54px;
+        border-radius: 50%;
+        background: linear-gradient(135deg, #36d1dc, #6d4aff, #a855f7);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 1.55rem;
+        flex-shrink: 0;
+        box-shadow: 0 0 24px rgba(109, 74, 255, 0.55);
     }
-    .sidebar-header-title { font-weight: 700; font-size: 1.05rem; color: #f1f5f9; }
-    .sidebar-header-tagline { font-size: 0.72rem; color: #a5b4fc; }
-    .sidebar-header-desc { font-size: 0.78rem; color: #cbd5e1; line-height: 1.5; margin-top: 0.6rem; }
+
+    /* CHANGED: Sidebar title made bolder */
+    .sidebar-header-title {
+        font-weight: 800;
+        font-size: 1.12rem;
+        color: #ffffff;
+    }
+
+    /* CHANGED: Sidebar tagline softened */
+    .sidebar-header-tagline {
+        font-size: 0.76rem;
+        color: #d8d5ff;
+        margin-top: 2px;
+    }
+
+    /* CHANGED: Sidebar description spacing improved */
+    .sidebar-header-desc {
+        font-size: 0.84rem;
+        color: #e2e8f0;
+        line-height: 1.65;
+        margin-top: 0.85rem;
+    }
+
+    /* CHANGED: Sidebar navigation buttons converted into dashboard pill buttons */
     .st-key-sidebar_nav .stButton > button {
         width: 100%;
         text-align: left;
         justify-content: flex-start;
-        font-weight: 500;
-        border-radius: 10px;
-        margin-bottom: 2px;
+        font-weight: 700;
+        border-radius: 14px;
+        margin-bottom: 5px;
+        padding: 0.75rem 0.9rem;
+        transition: all 0.2s ease;
     }
+
+    /* CHANGED: Inactive sidebar buttons made glassy */
     .st-key-sidebar_nav .stButton > button[kind="secondary"] {
-        background-color: transparent;
-        border: none;
-        color: #cbd5e1;
+        background: rgba(255,255,255,0.04);
+        border: 1px solid rgba(255,255,255,0.05);
+        color: #dbe4f0;
     }
+
+    /* CHANGED: Sidebar hover gets premium purple highlight */
     .st-key-sidebar_nav .stButton > button[kind="secondary"]:hover {
-        background-color: #1e293b;
-        color: #f1f5f9;
+        background: rgba(109, 74, 255, 0.22);
+        border-color: rgba(139, 108, 255, 0.45);
+        color: #ffffff;
+        transform: translateX(3px);
     }
+
+    /* CHANGED: Active sidebar tab uses purple gradient */
     .st-key-sidebar_nav .stButton > button[kind="primary"] {
-        background: linear-gradient(135deg, #6366f1, #8b5cf6);
-        border: none;
-        box-shadow: 0 2px 8px rgba(99, 102, 241, 0.35);
+        background: linear-gradient(135deg, #6d4aff, #4f46e5);
+        border: 1px solid rgba(255,255,255,0.16);
+        box-shadow: 0 12px 25px rgba(109, 74, 255, 0.35);
+        color: #ffffff;
     }
-    /* Chat widget lives in its own reserved right-hand column (not a page-wide
-       fixed overlay) so it can never cover the main content underneath it -
-       `position: fixed` was sitting on top of whatever content happened to be
-       scrolled into that corner. `sticky` instead keeps it pinned near the top
-       of its own column while the page scrolls, with zero overlap risk. */
+
+    /* CHANGED: Hero banner upgraded from flat blue to premium gradient card */
+    .hero-banner {
+        background:
+            radial-gradient(circle at top left, rgba(255,255,255,0.18), transparent 28%),
+            linear-gradient(135deg, rgba(109, 74, 255, 0.96), rgba(20, 184, 212, 0.72));
+        border: 1px solid rgba(255,255,255,0.16);
+        border-radius: 26px;
+        padding: 2.4rem 1.8rem;
+        margin-bottom: 1.5rem;
+        text-align: center;
+        box-shadow: 0 24px 55px rgba(0, 0, 0, 0.32);
+        overflow: hidden;
+    }
+
+    /* CHANGED: Hero icon enlarged with glow */
+    .hero-banner .hero-icon {
+        font-size: 3rem;
+        filter: drop-shadow(0 0 16px rgba(255,255,255,0.35));
+    }
+
+    /* CHANGED: Hero title made stronger */
+    .hero-banner h1 {
+        color: white !important;
+        margin: 0.25rem 0 0.4rem 0;
+        font-size: 2.25rem;
+        font-weight: 800;
+    }
+
+    /* CHANGED: Hero subtitle contrast improved */
+    .hero-banner p {
+        color: #eaf2ff !important;
+        margin: 0;
+        font-size: 1.05rem;
+    }
+
+    /* CHANGED: All app cards converted into glassmorphism dashboard cards */
+    .card {
+        background: linear-gradient(145deg, rgba(22, 39, 70, 0.90), rgba(10, 21, 39, 0.86));
+        border: 1px solid var(--border-soft);
+        border-radius: 22px;
+        padding: 1.35rem 1.5rem;
+        margin-bottom: 1rem;
+        box-shadow: var(--shadow-card);
+        color: #e2e8f0;
+        backdrop-filter: blur(18px);
+    }
+
+    /* CHANGED: Card hover effect added for premium feel */
+    .card:hover {
+        border-color: rgba(139, 108, 255, 0.38);
+        box-shadow: 0 22px 55px rgba(0, 0, 0, 0.40);
+        transform: translateY(-1px);
+        transition: all 0.2s ease;
+    }
+
+    /* CHANGED: Card heading typography improved */
+    .card h3 {
+        color: #f8fafc !important;
+        font-weight: 800;
+        margin-top: 0;
+    }
+
+    /* CHANGED: Card text forced to readable color */
+    .card p,
+    .card strong,
+    .card li {
+        color: #dbe4f0 !important;
+    }
+
+    /* CHANGED: Schedule and timeline outer containers made premium glass boxes */
+    .st-key-schedule_outer_card,
+    .st-key-timeline_outer_card {
+        background: rgba(10, 21, 39, 0.72);
+        border: 1px solid rgba(148, 163, 184, 0.18);
+        border-radius: 24px;
+        padding: 1.35rem 1.5rem 1.6rem 1.5rem;
+        box-shadow: var(--shadow-card);
+        backdrop-filter: blur(18px);
+    }
+
+    /* CHANGED: Welcome heading styled like a dashboard header */
+    .welcome-header h2 {
+        margin-bottom: 0.1rem;
+        font-size: 1.65rem;
+        font-weight: 800;
+        color: #ffffff !important;
+    }
+
+    /* CHANGED: Welcome subtitle softened */
+    .welcome-header p {
+        color: var(--text-muted) !important;
+        margin-top: 0;
+    }
+
+    /* CHANGED: Stat cards redesigned as premium summary tiles */
+    .stat-card {
+        background: linear-gradient(145deg, rgba(22, 39, 70, 0.92), rgba(13, 25, 45, 0.88));
+        border: 1px solid rgba(148, 163, 184, 0.16);
+        border-radius: 20px;
+        padding: 1.15rem 1.2rem;
+        height: 100%;
+        box-shadow: 0 15px 35px rgba(0,0,0,0.25);
+        backdrop-filter: blur(14px);
+    }
+
+    /* CHANGED: Stat label color improved */
+    .stat-card .stat-label {
+        font-size: 0.82rem;
+        color: #aebbd0;
+        margin-bottom: 6px;
+    }
+
+    /* CHANGED: Stat value enlarged */
+    .stat-card .stat-value {
+        font-size: 1.35rem;
+        font-weight: 800;
+        color: #f8fafc;
+    }
+
+    /* CHANGED: AI badge redesigned */
+    .stat-card .stat-badge {
+        display: inline-block;
+        margin-top: 8px;
+        font-size: 0.72rem;
+        background: rgba(20, 184, 212, 0.16);
+        color: #67e8f9;
+        padding: 2px 9px;
+        border-radius: 9999px;
+        border: 1px solid rgba(103, 232, 249, 0.18);
+    }
+
+    /* CHANGED: Confidence progress bar track improved */
+    .stat-progress-track {
+        background-color: rgba(51, 65, 85, 0.7);
+        border-radius: 9999px;
+        height: 9px;
+        margin-top: 10px;
+        overflow: hidden;
+    }
+
+    /* CHANGED: Confidence progress fill uses purple-cyan gradient */
+    .stat-progress-fill {
+        background: linear-gradient(90deg, #6d4aff, #14b8d4);
+        height: 100%;
+        border-radius: 9999px;
+    }
+
+    /* CHANGED: All Streamlit buttons upgraded with rounded gradient style */
+    .stButton > button,
+    .stDownloadButton > button {
+        border-radius: 14px !important;
+        border: 1px solid rgba(255,255,255,0.14) !important;
+        background: linear-gradient(135deg, #6d4aff, #4f46e5) !important;
+        color: white !important;
+        font-weight: 800 !important;
+        box-shadow: 0 12px 26px rgba(109, 74, 255, 0.25);
+        transition: all 0.2s ease;
+    }
+
+    /* CHANGED: Button hover animation added */
+    .stButton > button:hover,
+    .stDownloadButton > button:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 18px 34px rgba(109, 74, 255, 0.36);
+    }
+
+    /* CHANGED: File uploader converted into dark glass upload panel */
+    [data-testid="stFileUploader"] {
+        background: rgba(15, 30, 52, 0.75) !important;
+        border: 1px dashed rgba(139, 108, 255, 0.45) !important;
+        border-radius: 22px !important;
+        padding: 1rem !important;
+        box-shadow: var(--shadow-card);
+    }
+
+    /* CHANGED: Streamlit table layout improved for medicine schedule */
+    table {
+        border-collapse: separate !important;
+        border-spacing: 0 !important;
+        overflow: hidden;
+        border-radius: 16px;
+        border: 1px solid rgba(255,255,255,0.08);
+    }
+
+    /* CHANGED: Table header made purple-tinted */
+    thead tr th {
+        background: rgba(109, 74, 255, 0.18) !important;
+        color: #f8fafc !important;
+        border-bottom: 1px solid rgba(255,255,255,0.08) !important;
+        font-weight: 800 !important;
+    }
+
+    /* CHANGED: Table body rows made dark and readable */
+    tbody tr td {
+        background: rgba(15, 30, 52, 0.62) !important;
+        color: #e5e7eb !important;
+        border-bottom: 1px solid rgba(255,255,255,0.05) !important;
+    }
+
+    /* CHANGED: Streamlit tabs redesigned as pill buttons */
+    .stTabs [data-baseweb="tab-list"] {
+        gap: 0.5rem;
+        background: rgba(15, 30, 52, 0.64);
+        padding: 0.45rem;
+        border-radius: 18px;
+    }
+
+    /* CHANGED: Tab text made bolder */
+    .stTabs [data-baseweb="tab"] {
+        border-radius: 14px;
+        color: #cbd5e1;
+        font-weight: 800;
+    }
+
+    /* CHANGED: Active tab uses purple gradient */
+    .stTabs [aria-selected="true"] {
+        background: linear-gradient(135deg, #6d4aff, #4f46e5);
+        color: white !important;
+    }
+
+    /* CHANGED: Input fields made dark and rounded */
+    input,
+    textarea,
+    select {
+        background: rgba(15, 30, 52, 0.95) !important;
+        color: #f8fafc !important;
+        border-radius: 14px !important;
+    }
+
+    /* CHANGED: Selectbox/text-input inner text color fixed */
+    [data-testid="stSelectbox"] div,
+    [data-testid="stTextInput"] div,
+    [data-testid="stTextArea"] div {
+        color: #f8fafc !important;
+    }
+
+    /* CHANGED: Alerts made consistent with dark glass UI */
+    .stAlert {
+        background: rgba(15, 30, 52, 0.80) !important;
+        border-radius: 18px !important;
+        border: 1px solid rgba(148, 163, 184, 0.18) !important;
+        color: #f8fafc !important;
+    }
+
+    /* CHANGED: Chat panel redesigned to match the right-side assistant in target image */
     .st-key-chat_panel {
         position: sticky;
         top: 1rem;
         align-self: flex-start;
-        background-color: #12122b;
-        border: 1px solid #4c1d95;
-        border-radius: 20px;
+        background: linear-gradient(180deg, rgba(37, 32, 102, 0.98), rgba(10, 20, 38, 0.96));
+        border: 1px solid rgba(139, 92, 246, 0.60);
+        border-radius: 24px;
         padding: 1rem;
         max-height: calc(100vh - 2rem);
         overflow-y: auto;
-        box-shadow: 0 0 0 1px rgba(139, 92, 246, 0.25), 0 12px 30px rgba(0, 0, 0, 0.45);
+        box-shadow: 0 0 0 1px rgba(139, 92, 246, 0.25), 0 22px 55px rgba(0, 0, 0, 0.42);
+        backdrop-filter: blur(18px);
     }
+
+    /* CHANGED: Chat floating button improved */
     .st-key-chat_fab {
         position: sticky;
         top: 1rem;
@@ -1075,74 +1357,429 @@ render_html(
         display: flex;
         justify-content: flex-end;
     }
+
+    /* CHANGED: Floating chat button made round and glowing */
     .st-key-chat_fab .stButton > button {
-        width: 60px; height: 60px; border-radius: 50%;
-        background: linear-gradient(135deg, #6366f1, #8b5cf6);
-        border: none; font-size: 1.6rem; padding: 0;
-        box-shadow: 0 8px 20px rgba(99, 102, 241, 0.5);
+        width: 64px;
+        height: 64px;
+        border-radius: 50% !important;
+        background: linear-gradient(135deg, #6d4aff, #14b8d4) !important;
+        border: none !important;
+        font-size: 1.7rem;
+        padding: 0;
+        box-shadow: 0 16px 34px rgba(99, 102, 241, 0.5);
     }
-    .st-key-chat_close_wrap .stButton > button {
-        background: transparent; border: none; color: #94a3b8;
-        font-size: 1rem; padding: 0.1rem 0.4rem; min-height: auto; float: right;
+
+    /* CHANGED: Chat close button made minimal */
+    .st-key-chat_close_wrap .stButton > button,
+    .st-key-chat_clear_wrap .stButton > button {
+        background: transparent !important;
+        border: none !important;
+        color: #cbd5e1 !important;
+        font-size: 1rem;
+        padding: 0.1rem 0.4rem;
+        min-height: auto;
+        float: right;
+        box-shadow: none;
     }
-    .st-key-chat_close_wrap .stButton > button:hover { color: #f1f5f9; background: transparent; }
-    .st-key-chat_suggestions .stButton > button {
-        background: transparent;
-        border: 1px solid #4c1d95;
-        color: #c4b5fd;
-        border-radius: 9999px;
-        font-size: 0.7rem;
-        padding: 0.3rem 0.5rem;
+
+    /* CHANGED: Chat close hover kept clean */
+    .st-key-chat_close_wrap .stButton > button:hover,
+    .st-key-chat_clear_wrap .stButton > button:hover {
+        color: #ffffff !important;
+        background: transparent !important;
+        transform: none;
     }
-    .st-key-chat_suggestions .stButton > button:hover {
-        background-color: #312e81;
-        color: #f1f5f9;
-    }
+
+    /* CHANGED: Chat header upgraded */
     .chat-header {
-        display: flex; align-items: center; gap: 10px;
-        padding-bottom: 0.75rem; border-bottom: 1px solid #334155; margin-bottom: 0.75rem;
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        padding-bottom: 0.85rem;
+        border-bottom: 1px solid rgba(255,255,255,0.10);
+        margin-bottom: 0.9rem;
     }
-    .chat-avatar {
-        width: 40px; height: 40px; border-radius: 50%;
-        background: linear-gradient(135deg, #3b82f6, #1e3a8a);
-        display: flex; align-items: center; justify-content: center;
-        font-size: 1.25rem; flex-shrink: 0;
-    }
+
+    /* CHANGED: Chat avatar redesigned with cyan-purple gradient */
+    .chat-avatar,
     .chat-avatar-sm {
-        width: 28px; height: 28px; border-radius: 50%;
-        background: linear-gradient(135deg, #3b82f6, #1e3a8a);
-        display: flex; align-items: center; justify-content: center;
-        font-size: 0.85rem; flex-shrink: 0;
+        background: linear-gradient(135deg, #14b8d4, #6d4aff);
+        box-shadow: 0 0 18px rgba(20, 184, 212, 0.35);
     }
-    .chat-header-title { font-weight: 700; color: #e2e8f0; }
-    .beta-badge {
-        background-color: #166534; color: #dcfce7; font-size: 0.65rem;
-        padding: 1px 6px; border-radius: 9999px; margin-left: 4px; vertical-align: middle;
+
+    /* CHANGED: Main chat avatar sizing restored after redesign */
+    .chat-avatar {
+        width: 42px;
+        height: 42px;
+        border-radius: 50%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 1.25rem;
+        flex-shrink: 0;
     }
-    .chat-header-subtitle { font-size: 0.75rem; color: #94a3b8; }
-    .bubble-row { display: flex; gap: 8px; margin-bottom: 14px; align-items: flex-end; }
-    .bubble-row-user { justify-content: flex-end; }
-    .bubble-col { display: flex; flex-direction: column; max-width: 78%; }
-    .bubble-row-user .bubble-col { align-items: flex-end; }
-    .bubble {
-        padding: 0.55rem 0.85rem;
-        border-radius: 14px;
+
+    /* CHANGED: Small assistant bubble avatar sizing restored after redesign */
+    .chat-avatar-sm {
+        width: 30px;
+        height: 30px;
+        border-radius: 50%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
         font-size: 0.85rem;
-        line-height: 1.5;
+        flex-shrink: 0;
+    }
+
+    /* CHANGED: Chat title made bolder */
+    .chat-header-title {
+        font-weight: 800;
+        color: #ffffff;
+    }
+
+    /* CHANGED: Chat subtitle color softened */
+    .chat-header-subtitle {
+        font-size: 0.76rem;
+        color: #cbd5e1;
+    }
+
+    /* CHANGED: Beta badge made brighter */
+    .beta-badge {
+        background-color: #16a34a;
+        color: #dcfce7;
+        font-size: 0.66rem;
+        padding: 1px 7px;
+        border-radius: 9999px;
+        margin-left: 5px;
+        vertical-align: middle;
+        font-weight: 800;
+    }
+
+    /* CHANGED: Chat suggestion buttons redesigned as gold outline pills */
+    .st-key-chat_suggestions .stButton > button {
+        background: rgba(255,255,255,0.04) !important;
+        border: 1px solid rgba(251, 191, 36, 0.55) !important;
+        color: #fde68a !important;
+        border-radius: 9999px !important;
+        font-size: 0.78rem;
+        padding: 0.35rem 0.55rem;
+        box-shadow: none;
+    }
+
+    /* CHANGED: Chat suggestion hover improved */
+    .st-key-chat_suggestions .stButton > button:hover {
+        background: rgba(251, 191, 36, 0.12) !important;
+        color: #fff7cc !important;
+        transform: translateY(-1px);
+    }
+
+    /* CHANGED: Chat bubble row spacing improved */
+    .bubble-row {
+        display: flex;
+        gap: 8px;
+        margin-bottom: 14px;
+        align-items: flex-end;
+    }
+
+    /* CHANGED: User bubble aligned right */
+    .bubble-row-user {
+        justify-content: flex-end;
+    }
+
+    /* CHANGED: Bubble width improved */
+    .bubble-col {
+        display: flex;
+        flex-direction: column;
+        max-width: 80%;
+    }
+
+    /* CHANGED: User bubble column aligned right */
+    .bubble-row-user .bubble-col {
+        align-items: flex-end;
+    }
+
+    /* CHANGED: Bubble typography and shape improved */
+    .bubble {
+        padding: 0.65rem 0.9rem;
+        border-radius: 16px;
+        font-size: 0.88rem;
+        line-height: 1.55;
         text-align: left;
     }
+
+    /* CHANGED: Assistant bubble made glassy */
     .bubble-assistant {
-        background-color: #1e293b;
+        background: rgba(22, 39, 70, 0.88);
         color: #e2e8f0;
-        border-bottom-left-radius: 4px;
+        border-bottom-left-radius: 5px;
+        border: 1px solid rgba(255,255,255,0.06);
     }
+
+    /* CHANGED: User bubble made purple gradient */
     .bubble-user {
-        background: linear-gradient(135deg, #6366f1, #8b5cf6);
+        background: linear-gradient(135deg, #6d4aff, #4f46e5);
         color: white;
-        border-bottom-right-radius: 4px;
+        border-bottom-right-radius: 5px;
     }
-    .bubble-time { font-size: 0.65rem; color: #64748b; margin-top: 3px; padding: 0 4px; }
-    .bubble-time-user { color: #a5b4fc; }
+
+    /* CHANGED: Bubble timestamp softened */
+    .bubble-time {
+        font-size: 0.66rem;
+        color: #94a3b8;
+        margin-top: 3px;
+        padding: 0 4px;
+    }
+
+    /* CHANGED: User timestamp color improved */
+    .bubble-time-user {
+        color: #c4b5fd;
+    }
+
+    /* CHANGED: Footer made cleaner */
+    .app-footer {
+        text-align: center;
+        color: #94a3b8;
+        font-size: 0.86rem;
+        padding: 1.2rem 0 0.7rem 0;
+    }
+
+    /* CHANGED: Dividers made softer */
+    hr {
+        border-color: rgba(255,255,255,0.08) !important;
+    }
+
+    /* CHANGED: Scrollbar styled with purple thumb */
+    ::-webkit-scrollbar {
+        width: 8px;
+        height: 8px;
+    }
+
+    /* CHANGED: Scrollbar track darkened */
+    ::-webkit-scrollbar-track {
+        background: rgba(15, 23, 42, 0.5);
+    }
+
+    /* CHANGED: Scrollbar thumb colored */
+    ::-webkit-scrollbar-thumb {
+        background: rgba(139, 92, 246, 0.75);
+        border-radius: 999px;
+    }
+    /* CHANGED: Premium routine timeline cards for AI চিকিৎসার সময়রেখা section */
+.routine-slot-card {
+    position: relative;
+    min-height: 245px;
+    background: linear-gradient(145deg, rgba(22, 39, 70, 0.95), rgba(10, 21, 39, 0.92));
+    border: 1px solid rgba(148, 163, 184, 0.18);
+    border-radius: 22px;
+    padding: 1.25rem 1.25rem 4.5rem 1.25rem;
+    overflow: hidden;
+    box-shadow: 0 18px 40px rgba(0,0,0,0.30);
+}
+
+.routine-slot-title {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 1.25rem;
+    font-weight: 800;
+    color: #f8fafc;
+    margin-bottom: 0.25rem;
+}
+
+.routine-slot-icon {
+    font-size: 1.45rem;
+}
+
+.routine-slot-subtitle {
+    color: #cbd5e1;
+    font-size: 0.9rem;
+    margin-bottom: 0.8rem;
+}
+
+.routine-slot-list {
+    margin: 0;
+    padding-left: 1.1rem;
+    position: relative;
+    z-index: 2;
+}
+
+.routine-slot-list li {
+    margin-bottom: 0.65rem;
+    color: #dbe4f0;
+    line-height: 1.45;
+}
+
+.routine-slot-list li strong {
+    color: #ffffff;
+}
+
+.routine-slot-list li span {
+    color: #b6c2d6;
+    font-size: 0.88rem;
+}
+
+.empty-med {
+    color: #94a3b8 !important;
+}
+
+.ongoing-badge {
+    display: inline-block;
+    margin-left: 6px;
+    padding: 1px 7px;
+    border-radius: 999px;
+    background: rgba(20, 184, 212, 0.16);
+    color: #67e8f9 !important;
+    border: 1px solid rgba(103, 232, 249, 0.22);
+    font-size: 0.72rem !important;
+}
+
+/* CHANGED: Small scenic bottom area like the reference picture */
+.routine-landscape {
+    position: absolute;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    height: 70px;
+    opacity: 0.85;
+    z-index: 1;
+}
+
+.morning-card .routine-landscape {
+    background:
+        radial-gradient(circle at 22% 42%, #fbbf24 0 14px, transparent 15px),
+        radial-gradient(circle at 20% 100%, #22c55e 0 42px, transparent 43px),
+        radial-gradient(circle at 45% 105%, #16a34a 0 46px, transparent 47px),
+        linear-gradient(180deg, transparent 0%, rgba(34,197,94,0.22) 100%);
+}
+
+.noon-card .routine-landscape {
+    background:
+        radial-gradient(circle at 25% 100%, #22c55e 0 42px, transparent 43px),
+        radial-gradient(circle at 55% 105%, #16a34a 0 46px, transparent 47px),
+        radial-gradient(circle at 75% 100%, #15803d 0 40px, transparent 41px),
+        linear-gradient(180deg, transparent 0%, rgba(34,197,94,0.18) 100%);
+}
+
+.night-card .routine-landscape {
+    background:
+        radial-gradient(circle at 72% 35%, #e0e7ff 0 11px, transparent 12px),
+        radial-gradient(circle at 25% 105%, #312e81 0 45px, transparent 46px),
+        radial-gradient(circle at 55% 110%, #4338ca 0 50px, transparent 51px),
+        linear-gradient(180deg, transparent 0%, rgba(79,70,229,0.22) 100%);
+}
+/* CHANGED: Light mode chat panel text visibility fix only */
+/* Keeps dark mode unchanged and does NOT change main button colors */
+
+.theme-light .st-key-chat_panel,
+body[data-theme="light"] .st-key-chat_panel,
+.stApp.theme-light .st-key-chat_panel {
+    background: #ffffff !important;
+    border: 1px solid #dbe3ef !important;
+}
+
+/* Header text */
+.theme-light .chat-header-title,
+.theme-light .chat-header-subtitle,
+body[data-theme="light"] .chat-header-title,
+body[data-theme="light"] .chat-header-subtitle,
+.stApp.theme-light .chat-header-title,
+.stApp.theme-light .chat-header-subtitle {
+    color: #0f172a !important;
+}
+
+/* Assistant/user bubble text */
+.theme-light .bubble,
+.theme-light .bubble p,
+.theme-light .bubble span,
+.theme-light .bubble div,
+body[data-theme="light"] .bubble,
+body[data-theme="light"] .bubble p,
+body[data-theme="light"] .bubble span,
+body[data-theme="light"] .bubble div,
+.stApp.theme-light .bubble,
+.stApp.theme-light .bubble p,
+.stApp.theme-light .bubble span,
+.stApp.theme-light .bubble div {
+    color: #0f172a !important;
+}
+
+/* Assistant bubble background + text */
+.theme-light .bubble-assistant,
+body[data-theme="light"] .bubble-assistant,
+.stApp.theme-light .bubble-assistant {
+    background: #eef4fb !important;
+    border: 1px solid #d5e2f1 !important;
+    color: #0f172a !important;
+}
+
+/* User bubble stays blue, text must stay white */
+.theme-light .bubble-user,
+body[data-theme="light"] .bubble-user,
+.stApp.theme-light .bubble-user {
+    color: #ffffff !important;
+}
+
+/* Time text */
+.theme-light .bubble-time,
+body[data-theme="light"] .bubble-time,
+.stApp.theme-light .bubble-time {
+    color: #64748b !important;
+}
+
+.theme-light .bubble-time-user,
+body[data-theme="light"] .bubble-time-user,
+.stApp.theme-light .bubble-time-user {
+    color: #94a3b8 !important;
+}
+
+/* Suggested question buttons */
+.theme-light .st-key-chat_suggestions .stButton > button,
+body[data-theme="light"] .st-key-chat_suggestions .stButton > button,
+.stApp.theme-light .st-key-chat_suggestions .stButton > button {
+    background: #ffffff !important;
+    color: #0f172a !important;
+    border: 1px solid #e7c76a !important;
+}
+
+/* Chat input box */
+.theme-light .st-key-chat_panel input,
+.theme-light .st-key-chat_panel textarea,
+body[data-theme="light"] .st-key-chat_panel input,
+body[data-theme="light"] .st-key-chat_panel textarea,
+.stApp.theme-light .st-key-chat_panel input,
+.stApp.theme-light .st-key-chat_panel textarea {
+    background: #ffffff !important;
+    color: #0f172a !important;
+    border: 1px solid #cfd9e6 !important;
+}
+
+/* Placeholder text */
+.theme-light .st-key-chat_panel input::placeholder,
+.theme-light .st-key-chat_panel textarea::placeholder,
+body[data-theme="light"] .st-key-chat_panel input::placeholder,
+body[data-theme="light"] .st-key-chat_panel textarea::placeholder,
+.stApp.theme-light .st-key-chat_panel input::placeholder,
+.stApp.theme-light .st-key-chat_panel textarea::placeholder {
+    color: #94a3b8 !important;
+    opacity: 1 !important;
+}
+
+/* Small labels inside chat area */
+.theme-light .st-key-chat_panel label,
+.theme-light .st-key-chat_panel small,
+.theme-light .st-key-chat_panel p,
+.theme-light .st-key-chat_panel span,
+body[data-theme="light"] .st-key-chat_panel label,
+body[data-theme="light"] .st-key-chat_panel small,
+body[data-theme="light"] .st-key-chat_panel p,
+body[data-theme="light"] .st-key-chat_panel span,
+.stApp.theme-light .st-key-chat_panel label,
+.stApp.theme-light .st-key-chat_panel small,
+.stApp.theme-light .st-key-chat_panel p,
+.stApp.theme-light .st-key-chat_panel span {
+    color: #0f172a !important;
+}
     </style>
     """
 )
@@ -1528,23 +2165,41 @@ def _chat_now() -> str:
 
 
 def _render_chat_bubble(role: str, content: str, time_str: str) -> str:
-    """Build one WhatsApp-style chat bubble row as an HTML fragment."""
+    """Build one WhatsApp-style chat bubble row as an HTML fragment.
+
+    FIXED: Inline critical bubble colors based on the current theme. This makes
+    chat text readable even if Streamlit's internal CSS changes.
+    """
     safe_content = html.escape(content).replace("\n", "<br>")
+    is_light = st.session_state.get("app_theme", "Dark") == "Light"
+
+    assistant_style = (
+        "background:#f1f5f9; color:#0f172a; border:1px solid #dbe3ef;"
+        if is_light
+        else "background:rgba(30,41,59,0.96); color:#f8fafc; border:1px solid rgba(148,163,184,0.24);"
+    )
+    assistant_time_style = "color:#64748b;" if is_light else "color:#94a3b8;"
+    user_style = (
+        "background:linear-gradient(135deg,#2563eb,#0891b2); color:#ffffff; border:none;"
+    )
+    user_time_style = "color:rgba(255,255,255,0.82);"
+
     if role == "user":
         return f"""
         <div class="bubble-row bubble-row-user">
             <div class="bubble-col">
-                <div class="bubble bubble-user">{safe_content}</div>
-                <div class="bubble-time bubble-time-user">{time_str} ✓✓</div>
+                <div class="bubble bubble-user" style="{user_style}">{safe_content}</div>
+                <div class="bubble-time bubble-time-user" style="{user_time_style}">{time_str} ✓✓</div>
             </div>
         </div>
         """
+
     return f"""
     <div class="bubble-row bubble-row-assistant">
         <div class="chat-avatar-sm">🤖</div>
         <div class="bubble-col">
-            <div class="bubble bubble-assistant">{safe_content}</div>
-            <div class="bubble-time">{time_str}</div>
+            <div class="bubble bubble-assistant" style="{assistant_style}">{safe_content}</div>
+            <div class="bubble-time" style="{assistant_time_style}">{time_str}</div>
         </div>
     </div>
     """
@@ -1572,21 +2227,34 @@ def render_chat_panel(gemini_client, file_hash: str, language: str, T: dict) -> 
     if chat_messages_key not in st.session_state:
         st.session_state[chat_messages_key] = []
 
+    # FIXED: Critical chat text colors are also set inline so Light/Dark mode
+    # remains readable even when Streamlit changes internal class names.
+    is_light_theme = st.session_state.get("app_theme", "Dark") == "Light"
+    chat_title_style = "color:#0f172a;" if is_light_theme else "color:#ffffff;"
+    chat_subtitle_style = "color:#475569;" if is_light_theme else "color:#cbd5e1;"
+
     with st.container(key="chat_panel"):
-        header_col, close_col = st.columns([6, 1])
+        header_col, clear_col, close_col = st.columns([6, 1, 1])
         with header_col:
             render_html(
                 f"""
                 <div class="chat-header">
                     <div class="chat-avatar">🤖</div>
                     <div>
-                        <div class="chat-header-title">{T['chat_panel_title']}
+                        <div class="chat-header-title" style="{chat_title_style}">{T['chat_panel_title']}
                             <span class="beta-badge">{T['chat_beta_badge']}</span></div>
-                        <div class="chat-header-subtitle">{T['chat_panel_subtitle']}</div>
+                        <div class="chat-header-subtitle" style="{chat_subtitle_style}">{T['chat_panel_subtitle']}</div>
                     </div>
                 </div>
                 """
             )
+        with clear_col:
+            with st.container(key="chat_clear_wrap"):
+                if st.button("↻", key="chat_clear_button", help="Clear chat"):
+                    st.session_state[chat_messages_key] = []
+                    if chat_session_key in st.session_state:
+                        del st.session_state[chat_session_key]
+                    st.rerun()
         with close_col:
             with st.container(key="chat_close_wrap"):
                 if st.button("✕", key="chat_close_button"):
@@ -1621,23 +2289,75 @@ def render_chat_panel(gemini_client, file_hash: str, language: str, T: dict) -> 
         user_question = st.chat_input(T["chat_placeholder"]) or clicked_suggestion
 
         if user_question:
+            # CHAT RUNTIME FIX: Store only plain user/assistant messages in session_state.
+            # Do NOT store/reuse the Google GenAI Chat object across Streamlit reruns.
+            # Reusing that SDK chat object was the cause of repeated RuntimeError after
+            # asking several questions one after another.
             st.session_state[chat_messages_key].append(
                 {"role": "user", "content": user_question, "time": _chat_now()}
             )
+
             with st.spinner(T["chat_thinking"]):
                 try:
-                    report_cache_key = f"report_{file_hash}_{language}"
-                    report_text = st.session_state[report_cache_key]["text"]
-                    chat = get_chat_session(
-                        gemini_client, report_text, T["content_language"], chat_session_key
-                    )
-                    answer = chat.send_message(user_question).text
+                    if gemini_client is None:
+                        answer = T["api_key_missing"]
+                    else:
+                        report_cache_key = f"report_{file_hash}_{language}"
+                        if report_cache_key not in st.session_state:
+                            # CHAT RUNTIME FIX: Rebuild missing report context from cached result.
+                            cached_result = st.session_state.get("cached_result", {})
+                            cached_medicines = (
+                                cached_result.get("medicines", [])
+                                if isinstance(cached_result, dict)
+                                else []
+                            )
+                            cached_valid_medicines = [m for m in cached_medicines if isinstance(m, dict)]
+                            st.session_state[report_cache_key] = {
+                                "text": build_text_report(
+                                    cached_result, T, cached_valid_medicines, language
+                                )
+                            }
+
+                        report_text = st.session_state[report_cache_key]["text"]
+
+                        # CHAT RUNTIME FIX: Use a stateless Gemini call with the latest chat
+                        # history. This is safer in Streamlit than keeping a Chat object in
+                        # session_state and prevents RuntimeError on repeated questions.
+                        recent_messages = st.session_state[chat_messages_key][-10:]
+                        history_lines = []
+                        for msg in recent_messages[:-1]:
+                            role_label = "Patient" if msg.get("role") == "user" else "Assistant"
+                            content = str(msg.get("content", "")).strip()
+                            if content:
+                                history_lines.append(f"{role_label}: {content}")
+                        history_text = "\n".join(history_lines) if history_lines else "No previous chat."
+
+                        chat_prompt = (
+                            "You are a friendly medical assistant chatbot inside the MediClarity AI app.\n"
+                            "You must answer only using the prescription analysis context below.\n"
+                            "Do not diagnose. Do not replace a doctor or pharmacist.\n"
+                            f"Answer in simple, easy-to-understand {T['content_language']}.\n"
+                            "Keep the answer short: 2-4 sentences unless the patient asks for detail.\n\n"
+                            f"PRESCRIPTION ANALYSIS CONTEXT:\n{report_text}\n\n"
+                            f"RECENT CHAT HISTORY:\n{history_text}\n\n"
+                            f"PATIENT QUESTION:\n{user_question}"
+                        )
+
+                        response = gemini_client.models.generate_content(
+                            model=GEMINI_MODEL,
+                            contents=chat_prompt,
+                            config=types.GenerateContentConfig(temperature=0.4),
+                        )
+                        answer = (response.text or "").strip() or T["chat_error"]
+
                 except genai_errors.APIError as exc:
                     answer = f"{T['error_api_prefix']}{exc}"
                 except httpx.TransportError:
                     answer = T["error_network"]
-                except Exception:
-                    answer = T["chat_error"]
+                except Exception as exc:
+                    # CHAT RUNTIME FIX: Show the real error type only once for debugging.
+                    answer = f"{T['chat_error']} ({type(exc).__name__})"
+
             st.session_state[chat_messages_key].append(
                 {"role": "assistant", "content": answer, "time": _chat_now()}
             )
@@ -1694,7 +2414,15 @@ with st.sidebar:
         "🌐 ভাষা / Language", ["বাংলা", "English"], key="ui_language"
     )
     _T_nav = TRANSLATIONS[language]
+
+    # CHANGED: Added a real Dark/Light theme selector so the UI can switch modes from the sidebar.
+    appearance_mode = st.selectbox(
+        "🌓 Theme / থিম", ["Dark", "Light"], key="app_theme"
+    )
+
     elderly_mode = st.toggle("🧓 বড় ফন্ট মোড (Elderly Mode)", key="elderly_mode")
+
+    # CHANGED: Kept Color Blind mode as a working global UI setting, not only badge colors.
     colorblind_mode = st.toggle("🎨 Color Blind Friendly Mode", key="colorblind_mode")
 
     st.divider()
@@ -1702,9 +2430,983 @@ with st.sidebar:
 
 T = TRANSLATIONS[language]
 CONFIDENCE_BADGES = get_confidence_badges(language, colorblind_mode)
-DANGER_COLORS = DANGER_COLORS_COLORBLIND if colorblind_mode else DANGER_COLORS_DEFAULT
+
+# CHANGED: Replaced the harsh red danger cards with calmer, theme-aware safety colors.
+# In Dark mode: safety warnings use deep blue/amber cards.
+# In Light mode: safety warnings use soft blue/amber cards with dark readable text.
+if appearance_mode == "Light":
+    DANGER_COLORS = (
+        {"bg": "#eff6ff", "border": "#2563eb", "text": "#1e3a8a"}
+        if not colorblind_mode
+        else {"bg": "#eef2ff", "border": "#4f46e5", "text": "#312e81"}
+    )
+    WARNING_COLORS = {"bg": "#fffbeb", "border": "#f59e0b", "text": "#78350f"}
+else:
+    DANGER_COLORS = (
+        {"bg": "#0f2a44", "border": "#38bdf8", "text": "#dbeafe"}
+        if not colorblind_mode
+        else {"bg": "#1e1b4b", "border": "#f59e0b", "text": "#fde68a"}
+    )
+    WARNING_COLORS = {"bg": "#33260b", "border": "#fbbf24", "text": "#fef3c7"}
+
 have_prescription = "cached_result" in st.session_state
 nav_page = st.session_state.get("nav_page", "summary") if have_prescription else "summary"
+
+# CHANGED: Summary page polish CSS. This makes the Summary page less empty and more like a dashboard.
+render_html(
+    """
+    <style>
+    /* CHANGED: Compact success/result bar for the analyzed prescription page */
+    .result-status-card {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 1rem;
+        background: linear-gradient(135deg, rgba(16, 185, 129, 0.18), rgba(20, 184, 212, 0.10));
+        border: 1px solid rgba(52, 211, 153, 0.28);
+        border-radius: 18px;
+        padding: 0.85rem 1rem;
+        margin-bottom: 1rem;
+        box-shadow: 0 14px 30px rgba(0,0,0,0.18);
+    }
+
+    /* CHANGED: Main summary card redesigned for the first page after analysis */
+    .summary-hero-card {
+        background:
+            radial-gradient(circle at top left, rgba(109, 74, 255, 0.20), transparent 30%),
+            linear-gradient(145deg, rgba(22, 39, 70, 0.92), rgba(10, 21, 39, 0.88));
+        border: 1px solid rgba(139, 108, 255, 0.25);
+        border-radius: 24px;
+        padding: 1.4rem 1.5rem;
+        margin-bottom: 1.05rem;
+        box-shadow: 0 22px 50px rgba(0,0,0,0.30);
+    }
+
+    /* CHANGED: Patient info line now looks like chips instead of plain paragraph text */
+    .patient-chip-row {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.55rem;
+        margin: 0.65rem 0 0.8rem 0;
+    }
+
+    .patient-chip {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.35rem;
+        background: rgba(255,255,255,0.06);
+        border: 1px solid rgba(255,255,255,0.10);
+        border-radius: 999px;
+        padding: 0.28rem 0.75rem;
+        font-size: 0.84rem;
+        font-weight: 700;
+    }
+
+    /* CHANGED: New responsive dashboard grid for diagnosis, purpose, confidence, and risk */
+    .overview-grid {
+        display: grid;
+        grid-template-columns: repeat(4, minmax(0, 1fr));
+        gap: 0.85rem;
+        margin: 1rem 0 1.2rem 0;
+    }
+
+    .overview-card {
+        background: linear-gradient(145deg, rgba(22, 39, 70, 0.92), rgba(13, 25, 45, 0.88));
+        border: 1px solid rgba(148, 163, 184, 0.16);
+        border-radius: 20px;
+        padding: 1rem;
+        min-height: 145px;
+        box-shadow: 0 15px 35px rgba(0,0,0,0.24);
+        backdrop-filter: blur(14px);
+    }
+
+    .overview-label {
+        font-size: 0.78rem;
+        color: #aebbd0;
+        margin-bottom: 0.5rem;
+        font-weight: 700;
+    }
+
+    .overview-value {
+        font-size: 0.98rem;
+        line-height: 1.48;
+        font-weight: 800;
+        color: #f8fafc;
+        max-height: 105px;
+        overflow-y: auto;
+        padding-right: 4px;
+    }
+
+    .overview-big-number {
+        font-size: 2.05rem;
+        font-weight: 900;
+        color: #f8fafc;
+        line-height: 1;
+    }
+
+    .overview-progress-track {
+        width: 100%;
+        height: 9px;
+        border-radius: 999px;
+        overflow: hidden;
+        background: rgba(51, 65, 85, 0.72);
+        margin-top: 0.85rem;
+    }
+
+    .overview-progress-fill {
+        height: 100%;
+        border-radius: 999px;
+        background: linear-gradient(90deg, #6d4aff, #14b8d4);
+    }
+
+    .risk-pill {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        border-radius: 999px;
+        padding: 0.35rem 0.85rem;
+        font-weight: 900;
+        margin-top: 0.8rem;
+        background: rgba(16, 185, 129, 0.14);
+        color: #86efac;
+        border: 1px solid rgba(74, 222, 128, 0.24);
+    }
+
+    .risk-pill.high-risk {
+        background: rgba(239, 68, 68, 0.14);
+        color: #fecaca;
+        border-color: rgba(248, 113, 113, 0.28);
+    }
+
+    @media (max-width: 1100px) {
+        .overview-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    }
+
+    @media (max-width: 720px) {
+        .overview-grid { grid-template-columns: 1fr; }
+    }
+    </style>
+    """
+)
+
+# CHANGED: Light mode override. This is intentionally placed AFTER sidebar controls,
+# so changing the Theme selectbox reruns the app and updates the full UI immediately.
+if appearance_mode == "Light":
+    render_html(
+        """
+        <style>
+
+        .stApp {
+            background:
+                radial-gradient(circle at top left, rgba(99, 102, 241, 0.14), transparent 34%),
+                radial-gradient(circle at top right, rgba(20, 184, 212, 0.12), transparent 30%),
+                linear-gradient(135deg, #f8fafc 0%, #eef6ff 48%, #f8fafc 100%) !important;
+            color: #0f172a !important;
+        }
+        [data-testid="stHeader"] {
+            background: rgba(248, 250, 252, 0.75) !important;
+            backdrop-filter: blur(14px);
+        }
+        [data-testid="stSidebar"] > div:first-child {
+            background: linear-gradient(180deg, #eef2ff 0%, #e0f2fe 48%, #f8fafc 100%) !important;
+            border-right: 1px solid rgba(15, 23, 42, 0.10) !important;
+            box-shadow: 10px 0 35px rgba(15,23,42,0.10) !important;
+        }
+        [data-testid="stSidebar"] h1,
+        [data-testid="stSidebar"] h2,
+        [data-testid="stSidebar"] h3,
+        [data-testid="stSidebar"] p,
+        [data-testid="stSidebar"] label,
+        [data-testid="stSidebar"] span,
+        .stApp p, .stApp li, .stApp label, .stApp span {
+            color: #0f172a !important;
+        }
+        h1, h2, h3, h4 { color: #0f172a !important; }
+        .sidebar-header-card, .card, .summary-hero-card, .overview-card, .stat-card,
+        .st-key-schedule_outer_card, .st-key-timeline_outer_card {
+            background: rgba(255, 255, 255, 0.82) !important;
+            border-color: rgba(15, 23, 42, 0.10) !important;
+            color: #0f172a !important;
+            box-shadow: 0 18px 45px rgba(15,23,42,0.10) !important;
+        }
+        .sidebar-header-title, .sidebar-header-tagline, .sidebar-header-desc,
+        .card h3, .card p, .card strong, .card li,
+        .welcome-header h2, .overview-value, .overview-big-number, .stat-card .stat-value {
+            color: #0f172a !important;
+        }
+        .welcome-header p, .overview-label, .stat-card .stat-label, .app-footer {
+            color: #475569 !important;
+        }
+        .patient-chip {
+            background: rgba(15, 23, 42, 0.05) !important;
+            border-color: rgba(15, 23, 42, 0.10) !important;
+            color: #0f172a !important;
+        }
+        .st-key-sidebar_nav .stButton > button[kind="secondary"] {
+            background: rgba(15, 23, 42, 0.04) !important;
+            border-color: rgba(15, 23, 42, 0.08) !important;
+            color: #1e293b !important;
+        }
+        .st-key-sidebar_nav .stButton > button[kind="secondary"]:hover {
+            background: rgba(99, 102, 241, 0.12) !important;
+            color: #111827 !important;
+        }
+        table { border-color: rgba(15,23,42,0.10) !important; }
+        thead tr th {
+            background: rgba(99, 102, 241, 0.12) !important;
+            color: #0f172a !important;
+        }
+        tbody tr td {
+            background: rgba(255, 255, 255, 0.72) !important;
+            color: #0f172a !important;
+        }
+        [data-testid="stFileUploader"], .stAlert {
+            background: rgba(255,255,255,0.82) !important;
+            border-color: rgba(99,102,241,0.26) !important;
+            color: #0f172a !important;
+        }
+        input, textarea, select {
+            background: rgba(255, 255, 255, 0.95) !important;
+            color: #0f172a !important;
+            border: 1px solid rgba(15,23,42,0.12) !important;
+        }
+        .st-key-chat_panel {
+            background: linear-gradient(180deg, rgba(255,255,255,0.96), rgba(239,246,255,0.96)) !important;
+            border-color: rgba(99,102,241,0.32) !important;
+            box-shadow: 0 20px 45px rgba(15,23,42,0.12) !important;
+        }
+        .chat-header-title, .chat-header-subtitle { color: #0f172a !important; }
+        .bubble-assistant {
+            background: rgba(226, 232, 240, 0.78) !important;
+            color: #0f172a !important;
+            border-color: rgba(15,23,42,0.08) !important;
+        }
+        .bubble-user, .bubble-user * { color: white !important; }
+        .risk-pill {
+            background: rgba(22, 163, 74, 0.10) !important;
+            color: #166534 !important;
+            border-color: rgba(22, 163, 74, 0.20) !important;
+        }
+        .risk-pill.high-risk {
+            background: rgba(220, 38, 38, 0.10) !important;
+            color: #991b1b !important;
+            border-color: rgba(220, 38, 38, 0.22) !important;
+        }
+        /* FINAL FIX: Light mode chat panel readability */
+/* This does not depend on .theme-light class */
+
+/* Chat panel container */
+.st-key-chat_panel {
+    background: #ffffff !important;
+    border: 1px solid #dbe3ef !important;
+}
+
+/* Chat header */
+.st-key-chat_panel .chat-header-title,
+.st-key-chat_panel .chat-header-subtitle {
+    color: #0f172a !important;
+}
+
+/* Assistant message bubble */
+.st-key-chat_panel .bubble-assistant,
+.st-key-chat_panel .bubble-assistant *,
+.st-key-chat_panel .bubble-assistant p,
+.st-key-chat_panel .bubble-assistant span,
+.st-key-chat_panel .bubble-assistant div {
+    background: #eef4fb !important;
+    color: #0f172a !important;
+}
+
+/* User message bubble */
+.st-key-chat_panel .bubble-user,
+.st-key-chat_panel .bubble-user *,
+.st-key-chat_panel .bubble-user p,
+.st-key-chat_panel .bubble-user span,
+.st-key-chat_panel .bubble-user div {
+    color: #ffffff !important;
+}
+
+/* Chat timestamps */
+.st-key-chat_panel .bubble-time {
+    color: #64748b !important;
+}
+
+/* Suggested question buttons */
+.st-key-chat_suggestions .stButton > button,
+.st-key-chat_suggestions .stButton > button *,
+.st-key-chat_suggestions button,
+.st-key-chat_suggestions button * {
+    background: #ffffff !important;
+    color: #0f172a !important;
+    border-color: #e7c76a !important;
+}
+
+/* Chat input area */
+[data-testid="stChatInput"],
+[data-testid="stChatInput"] *,
+[data-testid="stChatInput"] textarea,
+[data-testid="stChatInput"] input {
+    background: #ffffff !important;
+    color: #0f172a !important;
+}
+
+/* Chat input placeholder */
+[data-testid="stChatInput"] textarea::placeholder,
+[data-testid="stChatInput"] input::placeholder {
+    color: #64748b !important;
+    opacity: 1 !important;
+}
+
+/* Dark input wrapper inside Streamlit chat */
+[data-testid="stChatInput"] div {
+    background: #ffffff !important;
+    color: #0f172a !important;
+    border-color: #cbd5e1 !important;
+}
+
+/* Send button area */
+[data-testid="stChatInput"] button,
+[data-testid="stChatInput"] button * {
+    color: #ffffff !important;
+}
+
+        /* FINAL PATCH: Light mode clear/close chat action buttons */
+        .st-key-chat_clear_wrap .stButton > button,
+        .st-key-chat_close_wrap .stButton > button {
+            background: #f8fafc !important;
+            color: #334155 !important;
+            border: 1px solid #cbd5e1 !important;
+            border-radius: 999px !important;
+            width: 34px !important;
+            height: 34px !important;
+            min-height: 34px !important;
+            padding: 0 !important;
+            display: inline-flex !important;
+            align-items: center !important;
+            justify-content: center !important;
+            box-shadow: 0 6px 14px rgba(15, 23, 42, 0.08) !important;
+        }
+
+        .st-key-chat_clear_wrap .stButton > button:hover,
+        .st-key-chat_close_wrap .stButton > button:hover {
+            background: #e0f2fe !important;
+            color: #0f172a !important;
+            border-color: #38bdf8 !important;
+            transform: none !important;
+            box-shadow: 0 8px 18px rgba(14, 165, 233, 0.18) !important;
+        }
+
+        .st-key-chat_clear_wrap .stButton > button *,
+        .st-key-chat_close_wrap .stButton > button * {
+            color: #334155 !important;
+        }
+
+        .st-key-chat_clear_wrap .stButton > button:hover *,
+        .st-key-chat_close_wrap .stButton > button:hover * {
+            color: #0f172a !important;
+        }
+        </style>
+        """
+    )
+
+# CHANGED: Color Blind global override. It avoids relying on red/green as the main app accent.
+if colorblind_mode:
+    render_html(
+        """
+        <style>
+        .hero-banner, .stButton > button, .stDownloadButton > button,
+        .st-key-sidebar_nav .stButton > button[kind="primary"], .bubble-user {
+            background: linear-gradient(135deg, #2563eb, #0891b2) !important;
+        }
+        .sidebar-logo-circle, .chat-avatar, .chat-avatar-sm, .st-key-chat_fab .stButton > button {
+            background: linear-gradient(135deg, #2563eb, #0891b2, #f97316) !important;
+        }
+        .overview-progress-fill, .stat-progress-fill {
+            background: linear-gradient(90deg, #2563eb, #f97316) !important;
+        }
+        .summary-hero-card, .card:hover {
+            border-color: rgba(249, 115, 22, 0.35) !important;
+        }
+        .risk-pill.high-risk {
+            background: rgba(249, 115, 22, 0.16) !important;
+            color: #fed7aa !important;
+            border-color: rgba(249, 115, 22, 0.35) !important;
+        }
+        </style>
+        """
+    )
+
+
+# ============================== FINAL THEME CONTRAST SYSTEM ==============================
+# FIXED: This block is the final source of truth for colors.
+# It is intentionally rendered AFTER the older CSS + Light Mode + Color Blind patches
+# so it overrides all conflicting styles and keeps text readable in both modes.
+
+_theme_is_light = appearance_mode == "Light"
+
+if _theme_is_light:
+    _theme = {
+        "app_bg": "radial-gradient(circle at top left, rgba(37, 99, 235, 0.10), transparent 32%), radial-gradient(circle at top right, rgba(20, 184, 166, 0.12), transparent 28%), linear-gradient(135deg, #f8fafc 0%, #eef6ff 48%, #f8fafc 100%)",
+        "sidebar_bg": "linear-gradient(180deg, #f8fafc 0%, #eef6ff 50%, #f8fafc 100%)",
+        "card_bg": "#ffffff",
+        "card_bg_soft": "#f8fafc",
+        "surface_bg": "#ffffff",
+        "elevated_bg": "#f1f5f9",
+        "input_bg": "#ffffff",
+        "text": "#0f172a",
+        "heading": "#0b1220",
+        "muted": "#475569",
+        "border": "#dbe3ef",
+        "border_strong": "#cbd5e1",
+        "primary": "#2563eb",
+        "primary_2": "#0891b2",
+        "primary_hover": "#1d4ed8",
+        "button_text": "#ffffff",
+        "chip_bg": "#eef6ff",
+        "chip_text": "#0f172a",
+        "info_bg": "#eaf4ff",
+        "info_text": "#0f172a",
+        "success_bg": "#e9fbf3",
+        "success_text": "#065f46",
+        "warning_bg": "#fff7ed",
+        "warning_text": "#7c2d12",
+        "danger_bg": "#fef2f2",
+        "danger_text": "#991b1b",
+        "chat_bg": "#ffffff",
+        "chat_assistant_bg": "#f1f5f9",
+        "chat_input_bg": "#ffffff",
+        "shadow": "0 18px 45px rgba(15,23,42,0.10)",
+    }
+else:
+    _theme = {
+        "app_bg": "radial-gradient(circle at top left, rgba(37, 99, 235, 0.18), transparent 34%), radial-gradient(circle at top right, rgba(20, 184, 166, 0.14), transparent 28%), linear-gradient(135deg, #07111f 0%, #081629 45%, #050914 100%)",
+        "sidebar_bg": "linear-gradient(180deg, #0f172a 0%, #111827 52%, #07111f 100%)",
+        "card_bg": "rgba(15, 30, 52, 0.92)",
+        "card_bg_soft": "rgba(22, 39, 70, 0.88)",
+        "surface_bg": "rgba(10, 21, 39, 0.88)",
+        "elevated_bg": "rgba(22, 39, 70, 0.94)",
+        "input_bg": "rgba(15, 30, 52, 0.96)",
+        "text": "#f8fafc",
+        "heading": "#ffffff",
+        "muted": "#cbd5e1",
+        "border": "rgba(148, 163, 184, 0.22)",
+        "border_strong": "rgba(148, 163, 184, 0.35)",
+        "primary": "#3b82f6",
+        "primary_2": "#06b6d4",
+        "primary_hover": "#2563eb",
+        "button_text": "#ffffff",
+        "chip_bg": "rgba(59, 130, 246, 0.16)",
+        "chip_text": "#dbeafe",
+        "info_bg": "rgba(59, 130, 246, 0.16)",
+        "info_text": "#dbeafe",
+        "success_bg": "rgba(16, 185, 129, 0.16)",
+        "success_text": "#a7f3d0",
+        "warning_bg": "rgba(245, 158, 11, 0.16)",
+        "warning_text": "#fde68a",
+        "danger_bg": "rgba(239, 68, 68, 0.16)",
+        "danger_text": "#fecaca",
+        "chat_bg": "rgba(15, 30, 52, 0.96)",
+        "chat_assistant_bg": "rgba(30, 41, 59, 0.96)",
+        "chat_input_bg": "rgba(15, 23, 42, 0.96)",
+        "shadow": "0 18px 45px rgba(0,0,0,0.32)",
+    }
+
+# Color blind mode changes semantic accents but keeps main buttons blue for consistency.
+if colorblind_mode:
+    _theme["primary"] = "#2563eb"
+    _theme["primary_2"] = "#0891b2"
+
+render_html(
+    f"""
+    <style>
+    /* FINAL FIX: universal theme variables */
+    :root {{
+        --mc-app-bg: {_theme["app_bg"]};
+        --mc-sidebar-bg: {_theme["sidebar_bg"]};
+        --mc-card-bg: {_theme["card_bg"]};
+        --mc-card-bg-soft: {_theme["card_bg_soft"]};
+        --mc-surface-bg: {_theme["surface_bg"]};
+        --mc-elevated-bg: {_theme["elevated_bg"]};
+        --mc-input-bg: {_theme["input_bg"]};
+        --mc-text: {_theme["text"]};
+        --mc-heading: {_theme["heading"]};
+        --mc-muted: {_theme["muted"]};
+        --mc-border: {_theme["border"]};
+        --mc-border-strong: {_theme["border_strong"]};
+        --mc-primary: {_theme["primary"]};
+        --mc-primary-2: {_theme["primary_2"]};
+        --mc-primary-hover: {_theme["primary_hover"]};
+        --mc-button-text: {_theme["button_text"]};
+        --mc-chip-bg: {_theme["chip_bg"]};
+        --mc-chip-text: {_theme["chip_text"]};
+        --mc-info-bg: {_theme["info_bg"]};
+        --mc-info-text: {_theme["info_text"]};
+        --mc-success-bg: {_theme["success_bg"]};
+        --mc-success-text: {_theme["success_text"]};
+        --mc-warning-bg: {_theme["warning_bg"]};
+        --mc-warning-text: {_theme["warning_text"]};
+        --mc-danger-bg: {_theme["danger_bg"]};
+        --mc-danger-text: {_theme["danger_text"]};
+        --mc-chat-bg: {_theme["chat_bg"]};
+        --mc-chat-assistant-bg: {_theme["chat_assistant_bg"]};
+        --mc-chat-input-bg: {_theme["chat_input_bg"]};
+        --mc-shadow: {_theme["shadow"]};
+        --mc-button-bg: linear-gradient(135deg, var(--mc-primary), var(--mc-primary-2));
+    }}
+
+    /* FINAL FIX: App-level text and background */
+    .stApp {{
+        background: var(--mc-app-bg) !important;
+        color: var(--mc-text) !important;
+    }}
+
+    [data-testid="stHeader"] {{
+        background: transparent !important;
+    }}
+
+    .stApp, .stApp p, .stApp li, .stApp label, .stApp span,
+    .stApp div, .stApp small, .stApp section, .stApp article {{
+        color: var(--mc-text) !important;
+    }}
+
+    .stApp h1, .stApp h2, .stApp h3, .stApp h4, .stApp h5, .stApp h6,
+    .stMarkdown h1, .stMarkdown h2, .stMarkdown h3, .stMarkdown h4 {{
+        color: var(--mc-heading) !important;
+    }}
+
+    .stCaptionContainer, [data-testid="stCaptionContainer"], .stCaptionContainer *,
+    .welcome-header p, .overview-label, .stat-card .stat-label,
+    .bubble-time, .app-footer {{
+        color: var(--mc-muted) !important;
+    }}
+
+    /* FINAL FIX: Sidebar */
+    [data-testid="stSidebar"] > div:first-child {{
+        background: var(--mc-sidebar-bg) !important;
+        border-right: 1px solid var(--mc-border) !important;
+        box-shadow: var(--mc-shadow) !important;
+    }}
+
+    [data-testid="stSidebar"] *, 
+    [data-testid="stSidebar"] p,
+    [data-testid="stSidebar"] span,
+    [data-testid="stSidebar"] label,
+    [data-testid="stSidebar"] div {{
+        color: var(--mc-text) !important;
+    }}
+
+    .sidebar-header-card {{
+        background: var(--mc-card-bg) !important;
+        border: 1px solid var(--mc-border) !important;
+        box-shadow: var(--mc-shadow) !important;
+    }}
+
+    .sidebar-header-title,
+    .sidebar-header-tagline,
+    .sidebar-header-desc {{
+        color: var(--mc-text) !important;
+    }}
+
+    /* FINAL FIX: Cards and custom HTML sections */
+    .card, .summary-hero-card, .overview-card, .stat-card,
+    .st-key-schedule_outer_card, .st-key-timeline_outer_card,
+    .routine-slot-card {{
+        background: var(--mc-card-bg) !important;
+        border: 1px solid var(--mc-border) !important;
+        color: var(--mc-text) !important;
+        box-shadow: var(--mc-shadow) !important;
+    }}
+
+    .card *, .summary-hero-card *, .overview-card *, .stat-card *,
+    .st-key-schedule_outer_card *, .st-key-timeline_outer_card *,
+    .routine-slot-card * {{
+        color: var(--mc-text) !important;
+    }}
+
+    .card h3, .summary-hero-card h3, .overview-big-number,
+    .stat-card .stat-value, .routine-slot-title {{
+        color: var(--mc-heading) !important;
+    }}
+
+    .overview-label, .stat-card .stat-label,
+    .routine-slot-subtitle, .routine-slot-list li span {{
+        color: var(--mc-muted) !important;
+    }}
+
+    .patient-chip, .stat-badge, .ongoing-badge,
+    .summary-hero-card span:not(.beta-badge) {{
+        background: var(--mc-chip-bg) !important;
+        color: var(--mc-chip-text) !important;
+        border: 1px solid var(--mc-border) !important;
+    }}
+
+    .result-status-card {{
+        background: var(--mc-success-bg) !important;
+        border: 1px solid var(--mc-border-strong) !important;
+        color: var(--mc-success-text) !important;
+    }}
+    .result-status-card * {{
+        color: var(--mc-success-text) !important;
+    }}
+
+    /* FINAL FIX: Keep main buttons blue and readable in both modes */
+    .stButton > button,
+    .stDownloadButton > button,
+    .stFormSubmitButton > button,
+    button[kind="primary"] {{
+        background: var(--mc-button-bg) !important;
+        color: var(--mc-button-text) !important;
+        border: 1px solid rgba(255,255,255,0.20) !important;
+        border-radius: 14px !important;
+        font-weight: 800 !important;
+        box-shadow: 0 10px 24px rgba(37, 99, 235, 0.24) !important;
+    }}
+
+    .stButton > button *,
+    .stDownloadButton > button *,
+    .stFormSubmitButton > button *,
+    button[kind="primary"] * {{
+        color: var(--mc-button-text) !important;
+    }}
+
+    .stButton > button[kind="secondary"],
+    .st-key-sidebar_nav .stButton > button[kind="secondary"] {{
+        background: var(--mc-card-bg-soft) !important;
+        color: var(--mc-text) !important;
+        border: 1px solid var(--mc-border) !important;
+        box-shadow: none !important;
+    }}
+
+    .stButton > button[kind="secondary"] *,
+    .st-key-sidebar_nav .stButton > button[kind="secondary"] * {{
+        color: var(--mc-text) !important;
+    }}
+
+    .stButton > button:hover,
+    .stDownloadButton > button:hover {{
+        filter: brightness(0.98);
+        transform: translateY(-1px);
+    }}
+
+    /* FINAL FIX: Inputs, selectboxes, dropdown menus, textareas */
+    input, textarea, select,
+    [data-baseweb="input"],
+    [data-baseweb="textarea"],
+    [data-baseweb="select"] > div,
+    [data-testid="stTextInput"] input,
+    [data-testid="stTextArea"] textarea {{
+        background: var(--mc-input-bg) !important;
+        color: var(--mc-text) !important;
+        border-color: var(--mc-border-strong) !important;
+    }}
+
+    input::placeholder, textarea::placeholder {{
+        color: var(--mc-muted) !important;
+        opacity: 1 !important;
+    }}
+
+    [data-baseweb="popover"], [data-baseweb="menu"], [role="listbox"] {{
+        background: var(--mc-surface-bg) !important;
+        color: var(--mc-text) !important;
+        border: 1px solid var(--mc-border) !important;
+    }}
+
+    [role="option"], [role="option"] *,
+    [data-baseweb="select"] *, [data-baseweb="menu"] * {{
+        color: var(--mc-text) !important;
+    }}
+
+    /* FINAL FIX: File uploader */
+    [data-testid="stFileUploader"] {{
+        background: var(--mc-card-bg) !important;
+        border: 1px dashed var(--mc-border-strong) !important;
+        color: var(--mc-text) !important;
+    }}
+    [data-testid="stFileUploader"] *,
+    [data-testid="stFileUploader"] label,
+    [data-testid="stFileUploader"] small,
+    [data-testid="stFileUploader"] span,
+    [data-testid="stFileUploader"] p {{
+        color: var(--mc-text) !important;
+    }}
+    [data-testid="stFileUploader"] button,
+    [data-testid="stFileUploader"] button * {{
+        background: var(--mc-button-bg) !important;
+        color: #ffffff !important;
+    }}
+
+    /* FINAL FIX: Alerts/info/success/warning/error boxes */
+    [data-testid="stAlert"] {{
+        background: var(--mc-info-bg) !important;
+        border: 1px solid var(--mc-border-strong) !important;
+        color: var(--mc-info-text) !important;
+    }}
+    [data-testid="stAlert"] *,
+    .stAlert, .stAlert * {{
+        color: var(--mc-info-text) !important;
+    }}
+
+    /* FINAL FIX: Tables */
+    table, [data-testid="stTable"] {{
+        background: var(--mc-card-bg) !important;
+        border-color: var(--mc-border) !important;
+        color: var(--mc-text) !important;
+    }}
+    thead tr th {{
+        background: var(--mc-elevated-bg) !important;
+        color: var(--mc-heading) !important;
+        border-color: var(--mc-border) !important;
+    }}
+    tbody tr td {{
+        background: var(--mc-card-bg) !important;
+        color: var(--mc-text) !important;
+        border-color: var(--mc-border) !important;
+    }}
+    table * {{
+        color: var(--mc-text) !important;
+    }}
+
+    /* FINAL FIX: Tabs */
+    .stTabs [data-baseweb="tab-list"] {{
+        background: var(--mc-card-bg-soft) !important;
+        border: 1px solid var(--mc-border) !important;
+    }}
+    .stTabs [data-baseweb="tab"] {{
+        color: var(--mc-muted) !important;
+        background: transparent !important;
+    }}
+    .stTabs [data-baseweb="tab"] * {{
+        color: var(--mc-muted) !important;
+    }}
+    .stTabs [aria-selected="true"] {{
+        background: var(--mc-button-bg) !important;
+        color: #ffffff !important;
+    }}
+    .stTabs [aria-selected="true"] * {{
+        color: #ffffff !important;
+    }}
+
+    /* FINAL FIX: Chat panel, bubbles, suggestions and input */
+    .st-key-chat_panel {{
+        background: var(--mc-chat-bg) !important;
+        border: 1px solid var(--mc-border) !important;
+        color: var(--mc-text) !important;
+        box-shadow: var(--mc-shadow) !important;
+    }}
+    .st-key-chat_panel * {{
+        color: var(--mc-text) !important;
+    }}
+
+    .chat-header-title {{
+        color: var(--mc-heading) !important;
+    }}
+    .chat-header-subtitle {{
+        color: var(--mc-muted) !important;
+    }}
+    .beta-badge {{
+        background: #16a34a !important;
+        color: #ffffff !important;
+    }}
+
+    .bubble-assistant {{
+        background: var(--mc-chat-assistant-bg) !important;
+        color: var(--mc-text) !important;
+        border: 1px solid var(--mc-border) !important;
+    }}
+    .bubble-assistant * {{
+        color: var(--mc-text) !important;
+    }}
+
+    .bubble-user {{
+        background: var(--mc-button-bg) !important;
+        color: #ffffff !important;
+        border: none !important;
+    }}
+    .bubble-user * {{
+        color: #ffffff !important;
+    }}
+
+    .bubble-time {{
+        color: var(--mc-muted) !important;
+    }}
+    .bubble-time-user {{
+        color: rgba(255,255,255,0.78) !important;
+    }}
+
+    .st-key-chat_suggestions .stButton > button {{
+        background: var(--mc-chip-bg) !important;
+        color: var(--mc-chip-text) !important;
+        border: 1px solid var(--mc-border-strong) !important;
+        box-shadow: none !important;
+    }}
+    .st-key-chat_suggestions .stButton > button * {{
+        color: var(--mc-chip-text) !important;
+    }}
+
+    [data-testid="stChatInput"],
+    [data-testid="stChatInput"] > div,
+    [data-testid="stChatInput"] textarea,
+    [data-testid="stChatInput"] input {{
+        background: var(--mc-chat-input-bg) !important;
+        color: var(--mc-text) !important;
+        border-color: var(--mc-border-strong) !important;
+    }}
+    [data-testid="stChatInput"] * {{
+        color: var(--mc-text) !important;
+    }}
+    [data-testid="stChatInput"] textarea::placeholder,
+    [data-testid="stChatInput"] input::placeholder {{
+        color: var(--mc-muted) !important;
+        opacity: 1 !important;
+    }}
+    [data-testid="stChatInput"] button,
+    [data-testid="stChatInput"] button * {{
+        background: var(--mc-button-bg) !important;
+        color: #ffffff !important;
+    }}
+
+    /* FINAL FIX: Markdown/component text areas that used hardcoded dark/light values */
+    .stMarkdown, .stMarkdown *,
+    [data-testid="stMarkdownContainer"], [data-testid="stMarkdownContainer"] * {{
+        color: var(--mc-text) !important;
+    }}
+
+    .hero-banner h1, .hero-banner p,
+    .stButton > button *, .stDownloadButton > button * {{
+        color: #ffffff !important;
+    }}
+
+    /* FINAL FIX: Preserve medical warning readability */
+    div[style*="background-color:#451a03"],
+    div[style*="background-color:#451a03"] * {{
+        color: #fde68a !important;
+    }}
+    </style>
+    """
+)
+
+
+# ============================== TIMELINE LAYOUT POLISH ==============================
+# FIXED: Equal-height routine cards and more organized timeline tabs.
+# This only changes layout/spacing. It does not touch Gemini/API logic.
+render_html(
+    """
+    <style>
+    /* FINAL UI FIX: More breathing room around the timeline section */
+    .st-key-timeline_outer_card {
+        padding: 1.55rem 1.65rem 1.75rem 1.65rem !important;
+    }
+
+    /* FINAL UI FIX: Give Day 1-5 / Day 6-10 / etc. tabs proper spacing and pill shape */
+    .st-key-timeline_outer_card .stTabs [data-baseweb="tab-list"],
+    .stTabs [data-baseweb="tab-list"] {
+        display: flex !important;
+        flex-wrap: wrap !important;
+        gap: 0.75rem !important;
+        padding: 0.65rem !important;
+        margin: 0.75rem 0 1.05rem 0 !important;
+        border-radius: 18px !important;
+    }
+
+    .st-key-timeline_outer_card .stTabs [data-baseweb="tab"],
+    .stTabs [data-baseweb="tab"] {
+        min-width: 104px !important;
+        min-height: 42px !important;
+        padding: 0.55rem 0.95rem !important;
+        border-radius: 999px !important;
+        display: inline-flex !important;
+        align-items: center !important;
+        justify-content: center !important;
+        font-weight: 800 !important;
+        white-space: nowrap !important;
+    }
+
+    .st-key-timeline_outer_card .stTabs [data-baseweb="tab-panel"],
+    .stTabs [data-baseweb="tab-panel"] {
+        padding-top: 0.65rem !important;
+    }
+
+    /* FINAL UI FIX: Increase gap between Morning / Noon / Night cards */
+    .st-key-timeline_outer_card [data-testid="stHorizontalBlock"] {
+        gap: 1.1rem !important;
+        align-items: stretch !important;
+    }
+
+    .st-key-timeline_outer_card [data-testid="column"] {
+        display: flex !important;
+        flex-direction: column !important;
+        min-height: 100% !important;
+    }
+
+    /* FINAL UI FIX: Routine cards now always have the same box size regardless of text amount */
+    .routine-slot-card {
+        height: 360px !important;
+        min-height: 360px !important;
+        max-height: 360px !important;
+        width: 100% !important;
+        display: flex !important;
+        flex-direction: column !important;
+        padding: 1.25rem 1.25rem 4.6rem 1.25rem !important;
+        box-sizing: border-box !important;
+    }
+
+    /* FINAL UI FIX: Long medicine lists scroll inside the card instead of stretching card height */
+    .routine-slot-list {
+        flex: 1 1 auto !important;
+        max-height: 215px !important;
+        overflow-y: auto !important;
+        padding-right: 0.45rem !important;
+        padding-bottom: 0.75rem !important;
+        margin-top: 0.5rem !important;
+    }
+
+    .routine-slot-list li {
+        margin-bottom: 0.8rem !important;
+        line-height: 1.5 !important;
+    }
+
+    .routine-slot-title {
+        min-height: 34px !important;
+        margin-bottom: 0.2rem !important;
+    }
+
+    .routine-slot-subtitle {
+        min-height: 22px !important;
+        margin-bottom: 0.55rem !important;
+    }
+
+    /* FINAL UI FIX: Keep the scenic decoration fixed at bottom so it does not resize the card */
+    .routine-landscape {
+        height: 76px !important;
+        pointer-events: none !important;
+    }
+
+    /* FINAL UI FIX: Better scrollbar inside routine cards */
+    .routine-slot-list::-webkit-scrollbar {
+        width: 6px !important;
+    }
+    .routine-slot-list::-webkit-scrollbar-thumb {
+        background: rgba(148, 163, 184, 0.45) !important;
+        border-radius: 999px !important;
+    }
+    .routine-slot-list::-webkit-scrollbar-track {
+        background: transparent !important;
+    }
+
+    /* FINAL UI FIX: On smaller screens keep the cards readable instead of squeezed */
+    @media (max-width: 1100px) {
+        .routine-slot-card {
+            height: 340px !important;
+            min-height: 340px !important;
+            max-height: 340px !important;
+        }
+        .routine-slot-list {
+            max-height: 195px !important;
+        }
+    }
+    </style>
+    """
+)
 
 if elderly_mode:
     render_html(
@@ -1723,6 +3425,76 @@ if elderly_mode:
         </style>
         """
     )
+
+
+# FINAL CHAT FIX: Keep same width, give better usable height, and prevent layout stretching.
+# The message history scrolls inside the panel instead of making the whole page awkwardly tall.
+render_html(
+    """
+    <style>
+    /* CHAT PANEL FIX: same width, controlled height */
+    .st-key-chat_panel {
+        height: min(650px, calc(100vh - 6rem)) !important;
+        min-height: 560px !important;
+        max-height: calc(100vh - 5rem) !important;
+        overflow: hidden !important;
+        display: flex !important;
+        flex-direction: column !important;
+    }
+
+    /* CHAT PANEL FIX: message history gets scroll, not the full page */
+    .st-key-chat_messages {
+        flex: 1 1 auto !important;
+        min-height: 280px !important;
+        max-height: 380px !important;
+        overflow-y: auto !important;
+        overflow-x: hidden !important;
+        padding: 0.85rem !important;
+        margin: 0.55rem 0 0.70rem 0 !important;
+        border-radius: 18px !important;
+        background: var(--mc-chat-input-bg) !important;
+        border: 1px solid var(--mc-border) !important;
+        scroll-behavior: smooth !important;
+    }
+
+    /* CHAT PANEL FIX: compact suggestions so the message area has more room */
+    .st-key-chat_suggestions {
+        flex: 0 0 auto !important;
+        margin-top: 0.25rem !important;
+        margin-bottom: 0.45rem !important;
+    }
+
+    .st-key-chat_suggestions .stButton > button {
+        min-height: 40px !important;
+        padding: 0.42rem 0.60rem !important;
+        white-space: normal !important;
+        line-height: 1.25 !important;
+    }
+
+    /* CHAT PANEL FIX: message bubbles wrap cleanly inside same width */
+    .st-key-chat_panel .bubble-col {
+        max-width: 84% !important;
+    }
+
+    .st-key-chat_panel .bubble {
+        line-height: 1.55 !important;
+        word-break: break-word !important;
+    }
+
+    @media (max-height: 760px) {
+        .st-key-chat_panel {
+            min-height: 520px !important;
+            height: calc(100vh - 4rem) !important;
+            max-height: calc(100vh - 4rem) !important;
+        }
+        .st-key-chat_messages {
+            min-height: 230px !important;
+            max-height: 310px !important;
+        }
+    }
+    </style>
+    """
+)
 
 gemini_client = get_gemini_client()
 if gemini_client is None:
@@ -1909,23 +3681,34 @@ else:
                 patient_name = html.escape(str(patient_info.get("name") or T["not_identified"]))
                 patient_age = html.escape(str(patient_info.get("age") or T["not_identified"]))
 
-                st.success(f"{T['success_prefix']}{len(valid_medicines)}{T['success_suffix']}")
-
+                # CHANGED: Replaced the default Streamlit success bar with a custom dashboard-style result bar.
                 render_html(
                     f"""
-                    <div class="card">
+                    <div class="result-status-card">
+                        <div><strong>✅ {T['status_done']}</strong> — {len(valid_medicines)} {T['success_suffix'].strip()}</div>
+                        <div style="font-size:0.82rem; opacity:0.85;">MediClarity AI</div>
+                    </div>
+                    """
+                )
+
+                # CHANGED: Summary card redesigned using chips and a cleaner hero-style card.
+                render_html(
+                    f"""
+                    <div class="summary-hero-card">
                         <h3>{T['summary_title']}
                             <span style="background-color:{oc_bg}; color:{oc_fg};
-                                padding:2px 10px; border-radius:9999px; font-size:0.75rem;
-                                font-weight:600; vertical-align:middle;">
+                                padding:3px 11px; border-radius:9999px; font-size:0.75rem;
+                                font-weight:800; vertical-align:middle; margin-left:6px;">
                                 {T['summary_overall']} {oc_label}
                             </span>
                         </h3>
-                        <p><strong>{T['patient_name_label']}:</strong> {patient_name}
-                            &nbsp;|&nbsp; <strong>{T['patient_age_label']}:</strong> {patient_age}</p>
-                        <p>{overall_summary}</p>
+                        <div class="patient-chip-row">
+                            <span class="patient-chip">👤 {T['patient_name_label']}: {patient_name}</span>
+                            <span class="patient-chip">🎂 {T['patient_age_label']}: {patient_age}</span>
+                            <span class="patient-chip">💊 {T['total_medicines_label']}: {len(valid_medicines)} {T['total_medicines_suffix']}</span>
+                        </div>
+                        <p style="margin-bottom:0.7rem; line-height:1.65;">{overall_summary}</p>
                         {condition_chips}
-                        <p><strong>{T['total_medicines_label']}:</strong> {len(valid_medicines)} {T['total_medicines_suffix']}</p>
                     </div>
                     """
                 )
@@ -1937,6 +3720,8 @@ else:
                         result.get("treatment_purpose"),
                     ] if part
                 )
+
+                # CHANGED: Kept voice/TXT/copy features, but placed them before dashboard cards for faster demo workflow.
                 speak_button(
                     speech_text, T["listen_button"], T["tts_lang"], T["tts_error"],
                     key=f"speak_{file_hash}_{language}",
@@ -1953,28 +3738,39 @@ else:
                         report_text, T["copy_button"], T["copy_success"], T["copy_failed"], "report"
                     )
 
-                st.divider()
-                stat_cols = st.columns(4)
-                with stat_cols[0]:
-                    render_stat_card(
-                        T["stat_condition_label"], probable_condition, T["ai_inference_badge"]
-                    )
-                with stat_cols[1]:
-                    render_stat_card(
-                        T["stat_purpose_label"], treatment_purpose, T["ai_analysis_badge"]
-                    )
-                with stat_cols[2]:
-                    render_stat_card(
-                        T["stat_confidence_label"],
-                        f"{CONFIDENCE_PERCENT.get(overall_confidence_key, 50)}%",
-                        progress_pct=CONFIDENCE_PERCENT.get(overall_confidence_key, 50),
-                    )
-                with stat_cols[3]:
-                    has_high_risk = any(as_bool(m.get("high_risk")) for m in valid_medicines)
-                    render_stat_card(
-                        T["stat_risk_label"],
-                        T["risk_high"] if has_high_risk else T["risk_low"],
-                    )
+                # CHANGED: Replaced four Streamlit stat cards with custom dashboard cards; long Bangla text no longer stretches the whole page badly.
+                confidence_pct = CONFIDENCE_PERCENT.get(overall_confidence_key, 50)
+                has_high_risk = any(as_bool(m.get("high_risk")) for m in valid_medicines)
+                risk_class = "high-risk" if has_high_risk else ""
+                risk_value = T["risk_high"] if has_high_risk else T["risk_low"]
+                render_html(
+                    f"""
+                    <div class="overview-grid">
+                        <div class="overview-card">
+                            <div class="overview-label">{T['stat_condition_label']}</div>
+                            <div class="overview-value">{probable_condition}</div>
+                            <div class="stat-badge">{T['ai_inference_badge']}</div>
+                        </div>
+                        <div class="overview-card">
+                            <div class="overview-label">{T['stat_purpose_label']}</div>
+                            <div class="overview-value">{treatment_purpose}</div>
+                            <div class="stat-badge">{T['ai_analysis_badge']}</div>
+                        </div>
+                        <div class="overview-card">
+                            <div class="overview-label">{T['stat_confidence_label']}</div>
+                            <div class="overview-big-number">{confidence_pct}%</div>
+                            <div class="overview-progress-track">
+                                <div class="overview-progress-fill" style="width:{confidence_pct}%;"></div>
+                            </div>
+                        </div>
+                        <div class="overview-card">
+                            <div class="overview-label">{T['stat_risk_label']}</div>
+                            <div class="overview-big-number">{risk_value}</div>
+                            <div class="risk-pill {risk_class}">{'⚠️' if has_high_risk else '✅'} {risk_value}</div>
+                        </div>
+                    </div>
+                    """
+                )
 
                 doctor_info = result.get("doctor_info", {})
                 if not isinstance(doctor_info, dict):
@@ -2068,86 +3864,121 @@ else:
                 st.write("")
 
                 with st.container(key="timeline_outer_card"):
+                    # CHANGED: Timeline section redesigned like the reference dashboard picture.
+                    # CHANGED: Uses fixed tabs: Day 1-5, 6-10, 11-15, 16-20, 21-30, Full Course.
+
                     st.subheader(T["timeline_title"])
                     st.caption(T["timeline_intro"])
 
                     day_ranges = build_treatment_timeline(valid_medicines)
-                    tab_labels = []
-                    for day_range in day_ranges:
-                        if day_range["start_day"] == day_range["end_day"]:
-                            tab_labels.append(T["timeline_day_single"].format(day=day_range["start_day"]))
-                        else:
-                            tab_labels.append(
-                                T["timeline_day_range"].format(
-                                    start=day_range["start_day"], end=day_range["end_day"]
-                                )
-                            )
-                    if len(day_ranges) > 1:
-                        tab_labels.append(f"📋 {T['timeline_full_course']}")
+
+                    # CHANGED: Fixed timeline tab labels.
+                    if language == "বাংলা":
+                        tab_labels = [
+                            "দিন ১-৫",
+                            "দিন ৬-১০",
+                            "দিন ১১-১৫",
+                            "দিন ১৬-২০",
+                            "দিন ২১-৩০",
+                            "পূর্ণ কোর্স",
+                        ]
+                    else:
+                        tab_labels = [
+                            "Day 1-5",
+                            "Day 6-10",
+                            "Day 11-15",
+                            "Day 16-20",
+                            "Day 21-30",
+                            "Full Course",
+                        ]
 
                     tabs = st.tabs(tab_labels)
 
+                    def render_timeline_slot_card(slot_icon, slot_title, slot_bg_class, medicines_html):
+                        # CHANGED: New premium slot card that looks like the picture: morning/noon/night cards.
+                        render_html(
+                            f"""
+                            <div class="routine-slot-card {slot_bg_class}">
+                                <div class="routine-slot-title">
+                                    <span class="routine-slot-icon">{slot_icon}</span>
+                                    <span>{slot_title}</span>
+                                </div>
+                                <div class="routine-slot-subtitle">খাবার পর</div>
+                                <ul class="routine-slot-list">
+                                    {medicines_html}
+                                </ul>
+                                <div class="routine-landscape"></div>
+                            </div>
+                            """
+                        )
+
                     def render_day_range(day_range) -> None:
+                        # CHANGED: Three-column visual medicine routine: Morning, Noon, Night.
                         slot_cols = st.columns(3)
-                        for slot_col, (flag_key, slot_label) in zip(
-                            slot_cols,
-                            (
-                                ("morning", T["morning_col"]),
-                                ("afternoon", T["afternoon_col"]),
-                                ("night", T["night_col"]),
-                            ),
-                        ):
+
+                        slot_config = [
+                            ("morning", "☀️", T["morning_col"], "morning-card"),
+                            ("afternoon", "🌤️", T["afternoon_col"], "noon-card"),
+                            ("night", "🌙", T["night_col"], "night-card"),
+                        ]
+
+                        for slot_col, (flag_key, slot_icon, slot_label, slot_bg_class) in zip(slot_cols, slot_config):
                             slot_items = []
+
                             for med in day_range["medicines"]:
                                 timing = med.get("timing")
                                 if not isinstance(timing, dict):
                                     timing = {}
+
                                 if not as_bool(timing.get(flag_key)):
                                     continue
+
                                 med_name = html.escape(str(med.get("medicine_name", T["unknown_medicine"])))
                                 meal_key = str(timing.get("meal_relation", "unspecified")).strip().lower()
                                 meal_text = get_meal_label(language, meal_key)
+
                                 ongoing_note = (
-                                    f' <span style="color:#94a3b8; font-size:0.8rem;">'
-                                    f'({T["timeline_ongoing_badge"]})</span>'
+                                    f' <span class="ongoing-badge">{T["timeline_ongoing_badge"]}</span>'
                                     if parse_duration_days(med) is None
                                     else ""
                                 )
-                                slot_items.append(f"<li>{med_name} — {meal_text}{ongoing_note}</li>")
-                            items_html = "".join(slot_items) or (
-                                f'<li style="color:#94a3b8;">{T["timeline_no_meds"]}</li>'
-                            )
-                            with slot_col:
-                                render_html(
-                                    f"""
-                                    <div class="card">
-                                        <h3>{slot_label}</h3>
-                                        <ul style="margin-top:0; padding-left:1.1rem;">{items_html}</ul>
-                                    </div>
-                                    """
+
+                                slot_items.append(
+                                    f"<li><strong>{med_name}</strong><br><span>{meal_text}</span>{ongoing_note}</li>"
                                 )
 
-                    for tab, day_range in zip(tabs, day_ranges):
+                            items_html = "".join(slot_items) or (
+                                f'<li class="empty-med">{T["timeline_no_meds"]}</li>'
+                            )
+
+                            with slot_col:
+                                render_timeline_slot_card(slot_icon, slot_label, slot_bg_class, items_html)
+
+                    # CHANGED: Render Day 1-5, 6-10, 11-15, 16-20, 21-30.
+                    for tab, day_range in zip(tabs[:5], day_ranges):
                         with tab:
                             render_day_range(day_range)
 
-                    if len(day_ranges) > 1:
-                        with tabs[-1]:
-                            all_meds_range = {
-                                "start_day": 1,
-                                "end_day": max(r["end_day"] for r in day_ranges),
-                                "medicines": valid_medicines,
-                            }
-                            render_day_range(all_meds_range)
+                    # CHANGED: Full Course tab shows all medicines together.
+                    with tabs[-1]:
+                        all_meds_range = {
+                            "start_day": 1,
+                            "end_day": 30,
+                            "medicines": valid_medicines,
+                        }
+                        render_day_range(all_meds_range)
 
             elif nav_page == "advice":
                 st.subheader(T["nav_advice"])
                 drug_interactions = html.escape(result.get("drug_interactions") or T["no_interaction"])
                 render_html(
                     f"""
-                    <div style="background-color:{DANGER_COLORS['bg']}; border-left:4px solid {DANGER_COLORS['border']};
-                        border-radius:8px; padding:1rem 1.25rem; margin-bottom:1rem; color:{DANGER_COLORS['text']};">
-                        💊⚠️ <strong>{T['interaction_label']}:</strong> {drug_interactions}
+                    <div style="background:{DANGER_COLORS['bg']}; border:1px solid {DANGER_COLORS['border']};
+                        border-left:6px solid {DANGER_COLORS['border']}; border-radius:14px;
+                        padding:1rem 1.25rem; margin-bottom:1rem; color:{DANGER_COLORS['text']} !important;
+                        box-shadow:0 12px 28px rgba(15,23,42,0.12); line-height:1.65;">
+                        <strong style="color:{DANGER_COLORS['text']} !important;">💊⚠️ {T['interaction_label']}:</strong>
+                        <span style="color:{DANGER_COLORS['text']} !important;"> {drug_interactions}</span>
                     </div>
                     """
                 )
@@ -2159,18 +3990,23 @@ else:
                     )
                     render_html(
                         f"""
-                        <div style="background-color:{DANGER_COLORS['bg']}; border-left:4px solid {DANGER_COLORS['border']};
-                            border-radius:8px; padding:1rem 1.25rem; margin-bottom:1rem; color:{DANGER_COLORS['text']};">
-                            🚨 <strong>{T['high_risk_label']}:</strong> {risk_names} — {T['high_risk_warning']}
+                        <div style="background:{DANGER_COLORS['bg']}; border:1px solid {DANGER_COLORS['border']};
+                            border-left:6px solid {DANGER_COLORS['border']}; border-radius:14px;
+                            padding:1rem 1.25rem; margin-bottom:1rem; color:{DANGER_COLORS['text']} !important;
+                            box-shadow:0 12px 28px rgba(15,23,42,0.12); line-height:1.65;">
+                            <strong style="color:{DANGER_COLORS['text']} !important;">⚠️ {T['high_risk_label']}:</strong>
+                            <span style="color:{DANGER_COLORS['text']} !important;"> {risk_names} — {T['high_risk_warning']}</span>
                         </div>
                         """
                     )
 
                 render_html(
                     f"""
-                    <div style="background-color:#451a03; border-left:4px solid #d97706;
-                        border-radius:8px; padding:1rem 1.25rem; margin-top:1.25rem; color:#fde68a;">
-                        {T['disclaimer']}
+                    <div style="background:{WARNING_COLORS['bg']}; border:1px solid {WARNING_COLORS['border']};
+                        border-left:6px solid {WARNING_COLORS['border']}; border-radius:14px;
+                        padding:1rem 1.25rem; margin-top:1.25rem; color:{WARNING_COLORS['text']} !important;
+                        box-shadow:0 12px 28px rgba(15,23,42,0.10); line-height:1.65;">
+                        <span style="color:{WARNING_COLORS['text']} !important;">{T['disclaimer']}</span>
                     </div>
                     """
                 )
