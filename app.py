@@ -70,10 +70,42 @@ def load_chatbot_asset():
             except (OSError, UnicodeDecodeError):
                 continue
         mime = "image/webp" if filename.endswith(".webp") else "image/gif"
-        with open(path, "rb") as f:
-            encoded = base64.b64encode(f.read()).decode("ascii")
+        try:
+            with open(path, "rb") as f:
+                encoded = base64.b64encode(f.read()).decode("ascii")
+        except OSError:
+            continue
         return "image", f"data:{mime};base64,{encoded}"
     return None, None
+
+
+# Separate from the FAB icon above - this is the small robot shown in the
+# chat panel's header and next to every assistant reply. Drop a file with
+# one of these names into the same assets/chatbot/ folder to replace the
+# fallback 🤖 emoji there too; no other code changes needed.
+CHATBOT_AVATAR_CANDIDATES = ("avatar.png", "avatar.webp", "avatar.gif")
+CHATBOT_AVATAR_MIME = {"png": "image/png", "webp": "image/webp", "gif": "image/gif"}
+
+
+@st.cache_data
+def load_chat_avatar_asset():
+    """Look for a custom chat avatar icon in assets/chatbot/.
+
+    Returns a base64 data: URI, or None if no avatar.png/.webp/.gif is
+    present yet - callers should fall back to the plain 🤖 emoji in that case.
+    """
+    for filename in CHATBOT_AVATAR_CANDIDATES:
+        path = os.path.join(CHATBOT_ASSET_DIR, filename)
+        if not os.path.isfile(path):
+            continue
+        ext = filename.rsplit(".", 1)[-1]
+        try:
+            with open(path, "rb") as f:
+                encoded = base64.b64encode(f.read()).decode("ascii")
+        except OSError:
+            continue
+        return f"data:{CHATBOT_AVATAR_MIME[ext]};base64,{encoded}"
+    return None
 #----------------------------CONFIDENCE --------------------------------------------------------------------------------
 CONFIDENCE_LABELS = {
     "বাংলা": {"high": "উচ্চ নির্ভরযোগ্যতা", "medium": "মাঝারি নির্ভরযোগ্যতা", "low": "কম নির্ভরযোগ্যতা"},
@@ -1492,6 +1524,15 @@ render_html(
         flex-shrink: 0;
     }
 
+    /* Custom avatar image (assets/chatbot/avatar.*) fills the circle
+       regardless of the source file's own aspect ratio/background. */
+    .chat-avatar-img {
+        width: 100%;
+        height: 100%;
+        object-fit: cover;
+        border-radius: 50%;
+    }
+
     /* CHANGED: Chat title made bolder */
     .chat-header-title {
         font-weight: 800;
@@ -2302,6 +2343,18 @@ def _chat_now() -> str:
     """Current local time formatted like '11:45 AM', for chat bubble timestamps."""
     return datetime.now().strftime("%I:%M %p").lstrip("0")
 
+#============================== CHAT BUBBLE RENDERING ==============================
+def _chat_avatar_inner_html() -> str:
+    """Custom robot <img> if assets/chatbot/avatar.* exists, else the 🤖 emoji.
+
+    Shared by the chat panel header avatar and every assistant bubble avatar
+    so both stay in sync automatically.
+    """
+    avatar_uri = load_chat_avatar_asset()
+    if avatar_uri:
+        return f'<img src="{avatar_uri}" alt="🤖" class="chat-avatar-img">'
+    return "🤖"
+
 
 def _render_chat_bubble(role: str, content: str, time_str: str) -> str:
     """Build one WhatsApp-style chat bubble row as an HTML fragment.
@@ -2335,7 +2388,7 @@ def _render_chat_bubble(role: str, content: str, time_str: str) -> str:
 
     return f"""
     <div class="bubble-row bubble-row-assistant">
-        <div class="chat-avatar-sm">🤖</div>
+        <div class="chat-avatar-sm">{_chat_avatar_inner_html()}</div>
         <div class="bubble-col">
             <div class="bubble bubble-assistant" style="{assistant_style}">{safe_content}</div>
             <div class="bubble-time" style="{assistant_time_style}">{time_str}</div>
@@ -2386,7 +2439,7 @@ def render_chat_panel(gemini_client, file_hash: str, language: str, T: dict) -> 
                 # this same fixed bottom-right spot.
                 pass
 
-            if st.button("🤖", key="chat_fab_button"):
+            if st.button(" ", key="chat_fab_button"):
                 st.session_state["chat_open"] = True
                 st.rerun()
         return
@@ -2409,7 +2462,7 @@ def render_chat_panel(gemini_client, file_hash: str, language: str, T: dict) -> 
             render_html(
                 f"""
                 <div class="chat-header">
-                    <div class="chat-avatar">🤖</div>
+                    <div class="chat-avatar">{_chat_avatar_inner_html()}</div>
                     <div>
                         <div class="chat-header-title" style="{chat_title_style}">{T['chat_panel_title']}
                             <span class="beta-badge">{T['chat_beta_badge']}</span></div>

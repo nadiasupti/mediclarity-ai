@@ -1,0 +1,12 @@
+# Keep the Docker build context lean and never let local-only or secret files
+# into the image. (These are also gitignored, so they won't reach the Space
+# repo either - this is belt-and-suspenders.)
+.env
+venv/
+.venv/
+__pycache__/
+*.pyc
+.git/
+.claude/
+sample_images/
+streamlit_restart.log
