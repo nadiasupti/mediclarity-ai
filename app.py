@@ -1456,7 +1456,7 @@ render_html(
         border: 1px solid rgba(139, 92, 246, 0.60);
         border-radius: 24px;
         padding: 1rem;
-        max-height: calc(100vh - 2rem);
+        max-height: 650px;
         overflow-y: auto;
         box-shadow: 0 0 0 1px rgba(139, 92, 246, 0.25), 0 22px 55px rgba(0, 0, 0, 0.42);
         backdrop-filter: blur(18px);
@@ -3685,11 +3685,15 @@ if elderly_mode:
 render_html(
     """
     <style>
-    /* CHAT PANEL FIX: same width, controlled height */
+    /* CHAT PANEL FIX: same width, controlled height.
+       Uses a FIXED pixel height (not vh/calc(100vh)) on purpose: on Hugging
+       Face Spaces the app runs inside an auto-sizing iframe, and a vh-based
+       panel height creates a resize feedback loop that makes the whole page
+       jitter/shake. Fixed px breaks that loop. */
     .st-key-chat_panel {
-        height: min(650px, calc(100vh - 6rem)) !important;
+        height: 650px !important;
         min-height: 560px !important;
-        max-height: calc(100vh - 5rem) !important;
+        max-height: 650px !important;
         overflow: hidden !important;
         display: flex !important;
         flex-direction: column !important;
@@ -3736,9 +3740,9 @@ render_html(
 
     @media (max-height: 760px) {
         .st-key-chat_panel {
-            min-height: 520px !important;
-            height: calc(100vh - 4rem) !important;
-            max-height: calc(100vh - 4rem) !important;
+            min-height: 480px !important;
+            height: 480px !important;
+            max-height: 480px !important;
         }
         .st-key-chat_messages {
             min-height: 230px !important;
@@ -3768,6 +3772,31 @@ render_html(
             margin-top: 1.25rem !important;
             min-width: 0;
         }
+    }
+    </style>
+    """
+)
+
+
+# ============================== SCROLLBAR STABILITY ==============================
+# Reserve the vertical scrollbar's space permanently so it never toggles on/off
+# as the page height changes (during upload/analysis, the spinner/status box
+# makes the content height hover right around the viewport height). Each toggle
+# changed the page width by the scrollbar's width, shifting everything
+# left-right = the horizontal "shake" seen on Hugging Face's iframe. With the
+# gutter always reserved (and the main area forced to always show a scrollbar),
+# the width stays constant and the jitter stops.
+render_html(
+    """
+    <style>
+    html, body, .stApp,
+    [data-testid="stAppViewContainer"] {
+        scrollbar-gutter: stable !important;
+    }
+    [data-testid="stMain"], section[data-testid="stMain"],
+    section.main, .main {
+        overflow-y: scroll !important;
+        scrollbar-gutter: stable !important;
     }
     </style>
     """
