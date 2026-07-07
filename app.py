@@ -70,8 +70,11 @@ def load_chatbot_asset():
             except (OSError, UnicodeDecodeError):
                 continue
         mime = "image/webp" if filename.endswith(".webp") else "image/gif"
-        with open(path, "rb") as f:
-            encoded = base64.b64encode(f.read()).decode("ascii")
+        try:
+            with open(path, "rb") as f:
+                encoded = base64.b64encode(f.read()).decode("ascii")
+        except OSError:
+            continue
         return "image", f"data:{mime};base64,{encoded}"
     return None, None
 
@@ -96,8 +99,11 @@ def load_chat_avatar_asset():
         if not os.path.isfile(path):
             continue
         ext = filename.rsplit(".", 1)[-1]
-        with open(path, "rb") as f:
-            encoded = base64.b64encode(f.read()).decode("ascii")
+        try:
+            with open(path, "rb") as f:
+                encoded = base64.b64encode(f.read()).decode("ascii")
+        except OSError:
+            continue
         return f"data:{CHATBOT_AVATAR_MIME[ext]};base64,{encoded}"
     return None
 #----------------------------CONFIDENCE --------------------------------------------------------------------------------

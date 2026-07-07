@@ -1,3 +1,13 @@
+---
+title: MediClarity AI
+emoji: 💊
+colorFrom: blue
+colorTo: indigo
+sdk: docker
+app_port: 8501
+pinned: false
+---
+
 # MediClarity AI 💊
 
 A simple web app that reads a photo of a prescription and explains it in **plain Bangla or English** — what each medicine is for, how to take it, side effects, and warnings. Built with Streamlit and Google Gemini Vision.
