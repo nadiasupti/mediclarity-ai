@@ -3777,6 +3777,31 @@ render_html(
     """
 )
 
+
+# ============================== SCROLLBAR STABILITY ==============================
+# Reserve the vertical scrollbar's space permanently so it never toggles on/off
+# as the page height changes (during upload/analysis, the spinner/status box
+# makes the content height hover right around the viewport height). Each toggle
+# changed the page width by the scrollbar's width, shifting everything
+# left-right = the horizontal "shake" seen on Hugging Face's iframe. With the
+# gutter always reserved (and the main area forced to always show a scrollbar),
+# the width stays constant and the jitter stops.
+render_html(
+    """
+    <style>
+    html, body, .stApp,
+    [data-testid="stAppViewContainer"] {
+        scrollbar-gutter: stable !important;
+    }
+    [data-testid="stMain"], section[data-testid="stMain"],
+    section.main, .main {
+        overflow-y: scroll !important;
+        scrollbar-gutter: stable !important;
+    }
+    </style>
+    """
+)
+
 gemini_client = get_gemini_client()
 if gemini_client is None:
     st.error(T["api_key_missing"])
