@@ -25,6 +25,43 @@ BENGALI_FONT_PATH = os.path.join(os.path.dirname(__file__), "assets", "fonts", "
 
 GEMINI_MODEL = "gemini-2.5-flash"
 
+# ============================== AI SAFETY THRESHOLDS ==============================
+# Gates that stop the app from hallucinating on non-prescription/non-report
+# images, or comparing documents that belong to different patients. All three
+# are single knobs - loosen them if genuine (but messy) documents get rejected
+# too often during a demo.
+CLASSIFY_CONFIDENCE_MIN = 0.85   # below this (or wrong category) -> reject, no analysis
+EXTRACTION_CONFIDENCE_MIN = 0.70  # below this -> ask for a clearer image
+PATIENT_MATCH_MIN = 70            # patient match score below this -> mismatch warning, no medical comparison
+
+# image_category values the classifier may return (shared by both analyzers).
+IMAGE_CATEGORIES = (
+    "prescription", "test_report", "medicine_package", "medicine_strip",
+    "pharmacy_label", "hospital_bill", "invoice", "non_medical", "unknown",
+)
+
+
+def get_category_label(T: dict, category: str) -> str:
+    """Localized display name for a classifier image_category (falls back to unknown)."""
+    key = category if category in IMAGE_CATEGORIES else "unknown"
+    return T.get(f"cat_{key}", T.get("cat_unknown", key))
+
+
+def as_confidence(value) -> float:
+    """Coerce an AI-provided confidence to a float in [0, 1].
+
+    Gemini may return the confidence as a number, a numeric string, or even a
+    percentage (e.g. 92 meaning 0.92); anything unparseable is treated as 0.0
+    so the caller fails safe (rejects) rather than trusting a bad reading.
+    """
+    try:
+        num = float(value)
+    except (TypeError, ValueError):
+        return 0.0
+    if num > 1:
+        num = num / 100.0
+    return max(0.0, min(1.0, num))
+
 # ============================== CHATBOT FAB CONFIG ==============================
 # Single knobs for the floating chat launcher's position/size. Horizontal
 # position is intentionally NOT configurable here - it's always pinned to the
@@ -272,9 +309,46 @@ TRANSLATIONS = {
         "error_network": (
             "ইন্টারনেট সংযোগে সমস্যা হয়েছে। দয়া করে আপনার সংযোগ পরীক্ষা করে আবার চেষ্টা করুন।"
         ),
+        "all_keys_busy": (
+            "⏳ এই মুহূর্তে সার্ভার ব্যস্ত (সব API key-এর আজকের সীমা শেষ)। "
+            "দয়া করে একটু পরে আবার চেষ্টা করুন।"
+        ),
         "error_parse": "AI-এর উত্তর সঠিকভাবে বোঝা যায়নি। দয়া করে আবার চেষ্টা করুন।",
         "error_unexpected_prefix": "একটি অপ্রত্যাশিত সমস্যা হয়েছে: ",
         "pdf_generation_failed": "PDF রিপোর্ট তৈরি করা যায়নি। আপনি TXT বা প্রিন্ট বিকল্প ব্যবহার করতে পারেন।",
+        "status_classifying": "🔎 ছবিটি যাচাই করা হচ্ছে...",
+        "classify_not_prescription": (
+            "❌ এই ছবিটি ডাক্তারের প্রেসক্রিপশন বলে মনে হচ্ছে না ({category})। "
+            "দয়া করে একটি সঠিক হাতে লেখা বা প্রিন্ট করা প্রেসক্রিপশনের ছবি আপলোড করুন।"
+        ),
+        "classify_not_test_report": (
+            "❌ এই ফাইলটি মেডিকেল টেস্ট রিপোর্ট বলে মনে হচ্ছে না ({category})। "
+            "দয়া করে একটি সঠিক ল্যাব/টেস্ট রিপোর্ট (ছবি বা PDF) আপলোড করুন।"
+        ),
+        "extraction_unclear": (
+            "⚠️ ছবিটি যথেষ্ট স্পষ্ট নয়, নির্ভরযোগ্যভাবে পড়া যাচ্ছে না। "
+            "দয়া করে আরও স্পষ্ট, ভালো আলোয় তোলা একটি ছবি আপলোড করুন।"
+        ),
+        "cat_prescription": "প্রেসক্রিপশন",
+        "cat_test_report": "টেস্ট রিপোর্ট",
+        "cat_medicine_package": "ওষুধের প্যাকেট/বাক্স",
+        "cat_medicine_strip": "ওষুধের স্ট্রিপ/পাতা",
+        "cat_pharmacy_label": "ফার্মেসির লেবেল",
+        "cat_hospital_bill": "হাসপাতালের বিল",
+        "cat_invoice": "ইনভয়েস/রসিদ",
+        "cat_non_medical": "চিকিৎসা-বহির্ভূত ছবি",
+        "cat_unknown": "অজানা ধরন",
+        "compare_status_match": "✅ মিল পাওয়া গেছে",
+        "compare_status_partial": "⚠️ আংশিক মিল",
+        "compare_status_mismatch": "❌ অমিল শনাক্ত হয়েছে",
+        "compare_mismatch_warning": (
+            "⚠️ এই টেস্ট রিপোর্টটি আপলোড করা প্রেসক্রিপশনের রোগীর নাও হতে পারে। "
+            "তুলনার ওপর নির্ভর করার আগে নিশ্চিত করুন যে দুটো ফাইল একই রোগীর।"
+        ),
+        "compare_matched_label": "যা মিলেছে",
+        "compare_mismatched_label": "যা মেলেনি / যাচাই করা যায়নি",
+        "compare_score_label": "রোগীর মিল স্কোর",
+        "compare_no_medical_on_mismatch": "রোগীর তথ্য না মেলায় কোনো মেডিকেল তুলনা দেখানো হয়নি।",
         "no_medicines": "কোনো ওষুধ শনাক্ত করা যায়নি।",
         "bad_format": "AI-এর উত্তর প্রত্যাশিত ফরম্যাটে পাওয়া যায়নি। দয়া করে আবার চেষ্টা করুন।",
         "success_prefix": "✅ বিশ্লেষণ সম্পন্ন — ",
@@ -460,9 +534,46 @@ TRANSLATIONS = {
         "status_unexpected_error": "❌ Unexpected error",
         "error_api_prefix": "Gemini API error: ",
         "error_network": "A network error occurred. Please check your connection and try again.",
+        "all_keys_busy": (
+            "⏳ The server is busy right now (all API keys have hit today's limit). "
+            "Please try again in a little while."
+        ),
         "error_parse": "Could not properly understand the AI's response. Please try again.",
         "error_unexpected_prefix": "An unexpected error occurred: ",
         "pdf_generation_failed": "Could not generate the PDF report. You can still use the TXT or Print options.",
+        "status_classifying": "🔎 Checking the image...",
+        "classify_not_prescription": (
+            "❌ This image does not appear to be a doctor's prescription ({category}). "
+            "Please upload a valid handwritten or printed prescription."
+        ),
+        "classify_not_test_report": (
+            "❌ This file does not appear to be a medical test report ({category}). "
+            "Please upload a valid lab/test report (image or PDF)."
+        ),
+        "extraction_unclear": (
+            "⚠️ The image isn't clear enough to read reliably. "
+            "Please upload a clearer, well-lit photo."
+        ),
+        "cat_prescription": "prescription",
+        "cat_test_report": "test report",
+        "cat_medicine_package": "medicine package/box",
+        "cat_medicine_strip": "medicine strip/blister",
+        "cat_pharmacy_label": "pharmacy label",
+        "cat_hospital_bill": "hospital bill",
+        "cat_invoice": "invoice/receipt",
+        "cat_non_medical": "non-medical image",
+        "cat_unknown": "unknown type",
+        "compare_status_match": "✅ Match",
+        "compare_status_partial": "⚠️ Partial match",
+        "compare_status_mismatch": "❌ Mismatch detected",
+        "compare_mismatch_warning": (
+            "⚠️ This medical report may not belong to the uploaded prescription. "
+            "Please verify that both files belong to the same patient before relying on this comparison."
+        ),
+        "compare_matched_label": "What matched",
+        "compare_mismatched_label": "What didn't match / couldn't verify",
+        "compare_score_label": "Patient match score",
+        "compare_no_medical_on_mismatch": "No medical comparison is shown because the patient details do not match.",
         "no_medicines": "No medicines were identified.",
         "bad_format": "The AI's response wasn't in the expected format. Please try again.",
         "success_prefix": "✅ Analysis complete — ",
@@ -1961,11 +2072,84 @@ render_html(
 )
 
 
+class AllKeysExhaustedError(Exception):
+    """Raised when every configured Gemini API key hit a quota/permission wall."""
+
+
+def _load_gemini_keys() -> list:
+    """Collect Gemini API keys in fallback priority order.
+
+    Reads GEMINI_API_KEY_1..9 (tried in that order) followed by a plain
+    GEMINI_API_KEY, so a multi-key setup (HF Secrets / .env) and the old
+    single-key setup both keep working. Duplicates removed, order preserved.
+    """
+    keys = []
+    for i in range(1, 10):
+        k = os.getenv(f"GEMINI_API_KEY_{i}")
+        if k and k.strip():
+            keys.append(k.strip())
+    plain = os.getenv("GEMINI_API_KEY")
+    if plain and plain.strip():
+        keys.append(plain.strip())
+    seen, ordered = set(), []
+    for k in keys:
+        if k not in seen:
+            seen.add(k)
+            ordered.append(k)
+    return ordered
+
+
+def _is_quota_error(exc) -> bool:
+    """True for API errors worth failing over to the next key for: a rate limit,
+    an exhausted daily quota, or a project whose access was denied."""
+    code = getattr(exc, "code", None)
+    if code in (429, 403):
+        return True
+    msg = str(exc).lower()
+    return any(
+        s in msg for s in
+        ("resource_exhausted", "quota", "rate limit", "permission_denied", "429", "403")
+    )
+
+
+class _FallbackModels:
+    """Mimics client.models, but generate_content fails over across keys."""
+
+    def __init__(self, clients):
+        self._clients = clients
+
+    def generate_content(self, **kwargs):
+        last_exc = None
+        for client in self._clients:
+            try:
+                return client.models.generate_content(**kwargs)
+            except genai_errors.APIError as exc:
+                if _is_quota_error(exc):
+                    last_exc = exc
+                    continue  # this key is rate-limited/denied - try the next one
+                raise  # a different API error (bad request, etc.) - surface as-is
+        raise AllKeysExhaustedError(str(last_exc) if last_exc else "no keys configured")
+
+
+class FallbackGeminiClient:
+    """Drop-in for genai.Client that tries each API key in order on quota errors.
+
+    Exposes only the `.models.generate_content(...)` surface the app uses, so
+    every existing call site keeps working unchanged. Fallback (not round-robin):
+    always start at key #1, move to #2, #3 only when one fails - predictable and
+    easy to debug.
+    """
+
+    def __init__(self, keys):
+        self._clients = [genai.Client(api_key=k) for k in keys]
+        self.models = _FallbackModels(self._clients)
+
+
 def get_gemini_client():
-    api_key = os.getenv("GEMINI_API_KEY")
-    if not api_key:
+    keys = _load_gemini_keys()
+    if not keys:
         return None
-    return genai.Client(api_key=api_key)
+    return FallbackGeminiClient(keys)
 
 
 def prepare_image_part(image: Image.Image, max_dimension: int = 2048, quality: int = 85) -> types.Part:
@@ -2000,19 +2184,50 @@ def prepare_test_report_part(uploaded_file) -> types.Part:
 
 def explain_prescription(client: genai.Client, image: Image.Image, content_language: str = "Bangla") -> dict:
     system_prompt = (
-        "You are a medical assistant that reads prescription images and explains them to "
-        f"patients in simple, easy-to-understand {content_language}. You must always respond "
-        "ONLY with valid JSON, no extra text. The JSON must be a single object with exactly "
-        "these top-level keys: \"overall_summary\", \"overall_confidence\", \"patient_info\", "
-        "\"doctor_info\", \"prescription_date\", \"follow_up_date\", \"probable_condition\", "
-        "\"detected_conditions\", \"treatment_purpose\", \"drug_interactions\", \"medicines\".\n"
+        "You are a strict medical-document classifier AND a medical assistant that reads "
+        "doctor's prescriptions and explains them to patients in simple, easy-to-understand "
+        f"{content_language}. You must always respond ONLY with valid JSON, no extra text.\n"
+        "STEP 1 - CLASSIFY the image first. Decide what the image actually is:\n"
+        "  - \"prescription\": a doctor's medical order (handwritten or printed) - typically "
+        "has an Rx symbol, a list of medicines with dosage/timing instructions, and usually a "
+        "doctor/chamber/hospital letterhead, a patient name, and a date.\n"
+        "  - \"test_report\": a lab/diagnostic report (blood, urine, imaging, etc.).\n"
+        "  - \"medicine_package\" / \"medicine_strip\" / \"pharmacy_label\": a MEDICINE PRODUCT "
+        "photo (box, blister strip, bottle, or a pharmacy sticker) showing brand/generic name, "
+        "manufacturer, batch, or expiry - this is NOT a prescription.\n"
+        "  - \"hospital_bill\" / \"invoice\": a bill or money receipt.\n"
+        "  - \"non_medical\": anything unrelated to healthcare.  - \"unknown\": cannot tell.\n"
+        "A photo of a medicine box/strip/label is NEVER a prescription, even though it shows a "
+        "medicine name - do not treat it as one.\n"
+        "The JSON must be a single object with exactly these top-level keys: \"image_category\", "
+        "\"is_prescription\", \"classification_confidence\", \"extraction_confidence\", "
+        "\"classification_reason\", \"overall_summary\", \"overall_confidence\", "
+        "\"patient_info\", \"doctor_info\", \"prescription_date\", \"follow_up_date\", "
+        "\"probable_condition\", \"detected_conditions\", \"treatment_purpose\", "
+        "\"drug_interactions\", \"medicines\".\n"
+        "- \"image_category\": exactly one of \"prescription\", \"test_report\", "
+        "\"medicine_package\", \"medicine_strip\", \"pharmacy_label\", \"hospital_bill\", "
+        "\"invoice\", \"non_medical\", \"unknown\" (English lowercase).\n"
+        "- \"is_prescription\": boolean - true ONLY if image_category is \"prescription\".\n"
+        "- \"classification_confidence\": a number 0 to 1 - how sure you are of image_category.\n"
+        "- \"extraction_confidence\": a number 0 to 1 - how legible/readable the prescription is "
+        "(use 0 when it is not a prescription).\n"
+        f"- \"classification_reason\": one short {content_language} phrase naming what the image "
+        "looks like (e.g. a medicine box, a bill), shown to the user when it is not a "
+        "prescription.\n"
+        "STEP 2 - Only if image_category is \"prescription\", extract the details below. If it "
+        "is NOT a prescription, set is_prescription=false and extraction_confidence=0 and leave "
+        "ALL medical fields empty (empty strings, empty lists, empty objects) - do NOT invent or "
+        "guess any doctor, patient, date, or medicine data.\n"
         f"- \"overall_summary\": a 2-3 sentence plain-{content_language} summary of the whole "
         "prescription.\n"
         "- \"overall_confidence\": one of \"high\", \"medium\", or \"low\" (English, "
         "lowercase), reflecting your overall confidence in reading the entire image.\n"
-        "- \"patient_info\": an object with exactly these keys: \"name\" and \"age\", each in "
-        f"simple {content_language} if visible on the prescription, otherwise a short phrase "
-        "meaning \"not identified\", written in the target language.\n"
+        "- \"patient_info\": an object with exactly these keys: \"name\", \"age\", and "
+        "\"gender\". \"name\" and \"age\" in simple "
+        f"{content_language} if visible on the prescription, otherwise a short phrase meaning "
+        "\"not identified\". \"gender\" must be exactly \"male\", \"female\", or \"unknown\" "
+        "(English lowercase).\n"
         "- \"doctor_info\": an object with exactly these keys: \"name\", \"degree\", "
         "\"hospital\" (hospital or chamber/clinic name), and \"phone\", each in simple "
         f"{content_language} if visible on the prescription, otherwise a short phrase meaning "
@@ -2063,8 +2278,10 @@ def explain_prescription(client: genai.Client, image: Image.Image, content_langu
     )
 
     user_prompt = (
-        "Below is an image of a handwritten/printed prescription. "
-        f"Analyze it fully and respond in simple {content_language} as instructed."
+        "Below is an uploaded image. First classify what it is, then - only if it is a "
+        f"doctor's prescription - analyze it fully and respond in simple {content_language} as "
+        "instructed. If it is not a prescription, return the classification fields with empty "
+        "medical fields."
     )
 
     response = client.models.generate_content(
@@ -2072,7 +2289,7 @@ def explain_prescription(client: genai.Client, image: Image.Image, content_langu
         contents=[prepare_image_part(image), user_prompt],
         config=types.GenerateContentConfig(
             system_instruction=system_prompt,
-            temperature=0.3,
+            temperature=0.2,
         ),
     )
 
@@ -2090,6 +2307,11 @@ def explain_prescription(client: genai.Client, image: Image.Image, content_langu
     elif not isinstance(data, dict):
         data = {}
 
+    image_category = str(data.get("image_category") or "unknown").strip().lower()
+    if image_category not in IMAGE_CATEGORIES:
+        image_category = "unknown"
+    is_prescription = as_bool(data.get("is_prescription")) and image_category == "prescription"
+
     medicines = data.get("medicines")
     if not isinstance(medicines, list):
         medicines = []
@@ -2099,9 +2321,11 @@ def explain_prescription(client: genai.Client, image: Image.Image, content_langu
     if not isinstance(patient_info_raw, dict):
         patient_info_raw = {}
     age_raw = patient_info_raw.get("age")
+    gender_raw = str(patient_info_raw.get("gender") or "unknown").strip().lower()
     patient_info = {
         "name": str(patient_info_raw.get("name") or "").strip(),
         "age": ("" if age_raw is None else str(age_raw)).strip(),
+        "gender": gender_raw if gender_raw in ("male", "female", "unknown") else "unknown",
     }
 
     doctor_info_raw = data.get("doctor_info")
@@ -2122,6 +2346,11 @@ def explain_prescription(client: genai.Client, image: Image.Image, content_langu
     ]
 
     return {
+        "image_category": image_category,
+        "is_prescription": is_prescription,
+        "classification_confidence": as_confidence(data.get("classification_confidence")),
+        "extraction_confidence": as_confidence(data.get("extraction_confidence")),
+        "classification_reason": str(data.get("classification_reason") or "").strip(),
         "overall_summary": str(data.get("overall_summary") or "").strip(),
         "overall_confidence": str(data.get("overall_confidence") or "low").strip().lower(),
         "patient_info": patient_info,
@@ -2140,19 +2369,37 @@ def explain_test_report(
     client: genai.Client, file_part: types.Part, content_language: str = "Bangla"
 ) -> dict:
     system_prompt = (
-        "You are a medical assistant that reads medical test/lab reports (blood tests, "
-        "urine tests, imaging reports, etc.) and explains them to patients in simple, "
-        f"easy-to-understand {content_language}. You must always respond ONLY with valid "
-        "JSON, no extra text. The JSON must be a single object with exactly these top-level "
-        "keys: \"overall_summary\", \"overall_confidence\", \"patient_info\", \"lab_info\", "
-        "\"report_date\", \"tests\".\n"
+        "You are a strict medical-document classifier AND a medical assistant that reads "
+        "medical test/lab reports (blood tests, urine tests, imaging reports, etc.) and "
+        f"explains them to patients in simple, easy-to-understand {content_language}. You must "
+        "always respond ONLY with valid JSON, no extra text.\n"
+        "STEP 1 - CLASSIFY the document first. \"test_report\" = a lab/diagnostic report with "
+        "test names, values, and reference ranges. A doctor's prescription, a medicine "
+        "box/strip/label, a bill/invoice, or a non-medical image is NOT a test report.\n"
+        "The JSON must be a single object with exactly these top-level keys: \"image_category\", "
+        "\"is_test_report\", \"classification_confidence\", \"extraction_confidence\", "
+        "\"classification_reason\", \"overall_summary\", \"overall_confidence\", "
+        "\"patient_info\", \"lab_info\", \"report_date\", \"tests\".\n"
+        "- \"image_category\": exactly one of \"prescription\", \"test_report\", "
+        "\"medicine_package\", \"medicine_strip\", \"pharmacy_label\", \"hospital_bill\", "
+        "\"invoice\", \"non_medical\", \"unknown\" (English lowercase).\n"
+        "- \"is_test_report\": boolean - true ONLY if image_category is \"test_report\".\n"
+        "- \"classification_confidence\": a number 0 to 1 - how sure you are of image_category.\n"
+        "- \"extraction_confidence\": a number 0 to 1 - how legible/readable the report is "
+        "(use 0 when it is not a test report).\n"
+        f"- \"classification_reason\": one short {content_language} phrase naming what the "
+        "document looks like, shown to the user when it is not a test report.\n"
+        "STEP 2 - Only if image_category is \"test_report\", extract the details below. If it is "
+        "NOT a test report, set is_test_report=false and extraction_confidence=0 and leave ALL "
+        "medical fields empty (empty strings, empty lists, empty objects) - do NOT invent data.\n"
         f"- \"overall_summary\": a 2-3 sentence plain-{content_language} summary of the whole "
         "report, mentioning whether results are mostly normal or if anything stands out.\n"
         "- \"overall_confidence\": one of \"high\", \"medium\", or \"low\" (English, "
         "lowercase), reflecting your overall confidence in reading the entire document.\n"
-        "- \"patient_info\": an object with exactly these keys: \"name\" and \"age\", each in "
-        f"simple {content_language} if visible, otherwise a short phrase meaning \"not "
-        "identified\", written in the target language.\n"
+        "- \"patient_info\": an object with exactly these keys: \"name\", \"age\", and "
+        "\"gender\". \"name\" and \"age\" in simple "
+        f"{content_language} if visible, otherwise a short phrase meaning \"not identified\". "
+        "\"gender\" must be exactly \"male\", \"female\", or \"unknown\" (English lowercase).\n"
         "- \"lab_info\": an object with exactly these keys: \"name\" (lab or hospital name) "
         f"and \"referring_doctor\", each in simple {content_language} if visible, otherwise a "
         "short phrase meaning \"not identified\", written in the target language.\n"
@@ -2175,8 +2422,10 @@ def explain_test_report(
     )
 
     user_prompt = (
-        "Below is a medical test/lab report (image or PDF). "
-        f"Analyze it fully and respond in simple {content_language} as instructed."
+        "Below is an uploaded document (image or PDF). First classify what it is, then - only "
+        f"if it is a medical test/lab report - analyze it fully and respond in simple "
+        f"{content_language} as instructed. If it is not a test report, return the "
+        "classification fields with empty medical fields."
     )
 
     response = client.models.generate_content(
@@ -2184,7 +2433,7 @@ def explain_test_report(
         contents=[file_part, user_prompt],
         config=types.GenerateContentConfig(
             system_instruction=system_prompt,
-            temperature=0.3,
+            temperature=0.2,
         ),
     )
 
@@ -2200,6 +2449,11 @@ def explain_test_report(
     elif not isinstance(data, dict):
         data = {}
 
+    image_category = str(data.get("image_category") or "unknown").strip().lower()
+    if image_category not in IMAGE_CATEGORIES:
+        image_category = "unknown"
+    is_test_report = as_bool(data.get("is_test_report")) and image_category == "test_report"
+
     tests = data.get("tests")
     if not isinstance(tests, list):
         tests = []
@@ -2209,9 +2463,11 @@ def explain_test_report(
     if not isinstance(patient_info_raw, dict):
         patient_info_raw = {}
     age_raw = patient_info_raw.get("age")
+    gender_raw = str(patient_info_raw.get("gender") or "unknown").strip().lower()
     patient_info = {
         "name": str(patient_info_raw.get("name") or "").strip(),
         "age": ("" if age_raw is None else str(age_raw)).strip(),
+        "gender": gender_raw if gender_raw in ("male", "female", "unknown") else "unknown",
     }
 
     lab_info_raw = data.get("lab_info")
@@ -2223,6 +2479,11 @@ def explain_test_report(
     }
 
     return {
+        "image_category": image_category,
+        "is_test_report": is_test_report,
+        "classification_confidence": as_confidence(data.get("classification_confidence")),
+        "extraction_confidence": as_confidence(data.get("extraction_confidence")),
+        "classification_reason": str(data.get("classification_reason") or "").strip(),
         "overall_summary": str(data.get("overall_summary") or "").strip(),
         "overall_confidence": str(data.get("overall_confidence") or "low").strip().lower(),
         "patient_info": patient_info,
@@ -2233,31 +2494,171 @@ def explain_test_report(
 
 
 def compare_reports(
-    client: genai.Client, prescription_text: str, test_report_text: str, content_language: str
-) -> str:
-    """Ask Gemini whether the prescribed medicines are consistent with the test results.
+    client: genai.Client, prescription_result: dict, test_result: dict, content_language: str
+) -> dict:
+    """Check that a prescription and a test report belong to the same patient, and
+    only then whether the medicines are consistent with the results.
 
-    Returns plain text (not JSON) since this is a one-off explanatory answer, not
-    something the UI needs to render into structured fields.
+    Returns a structured dict so the UI can show MATCH / PARTIAL_MATCH / MISMATCH
+    and refuse to draw medical conclusions when the two documents look like they
+    belong to different patients.
     """
-    prompt = (
-        "You are a medical assistant. Below is a patient's prescription analysis and a "
-        "separate medical test report analysis, both already summarized in plain language. "
-        f"Compare them and explain, in simple {content_language}, whether the prescribed "
-        "medicines appear consistent with the test results (e.g. does a prescribed medicine "
-        "make sense given an abnormal result, or does something seem inconsistent or worth "
-        "double-checking with a doctor). Keep your answer to 3-6 sentences. Do not provide a "
-        "diagnosis, and remind the patient to discuss any concerns with their doctor or "
-        "pharmacist.\n\n"
-        f"PRESCRIPTION ANALYSIS:\n{prescription_text}\n\n"
-        f"TEST REPORT ANALYSIS:\n{test_report_text}"
+    p_info = prescription_result.get("patient_info") or {}
+    r_info = test_result.get("patient_info") or {}
+    presc_meds = ", ".join(
+        str(m.get("medicine_name", "")).strip()
+        for m in prescription_result.get("medicines", []) if isinstance(m, dict)
+    ) or "none"
+    report_tests = ", ".join(
+        str(t.get("test_name", "")).strip()
+        for t in test_result.get("tests", []) if isinstance(t, dict)
+    ) or "none"
+
+    presc_context = (
+        f"Patient name: {p_info.get('name') or 'not stated'}\n"
+        f"Age: {p_info.get('age') or 'not stated'}\n"
+        f"Gender: {p_info.get('gender') or 'unknown'}\n"
+        f"Prescription date: {prescription_result.get('prescription_date') or 'not stated'}\n"
+        f"Probable condition: {prescription_result.get('probable_condition') or 'not stated'}\n"
+        f"Medicines: {presc_meds}"
     )
+    report_context = (
+        f"Patient name: {r_info.get('name') or 'not stated'}\n"
+        f"Age: {r_info.get('age') or 'not stated'}\n"
+        f"Gender: {r_info.get('gender') or 'unknown'}\n"
+        f"Report date: {test_result.get('report_date') or 'not stated'}\n"
+        f"Report summary: {test_result.get('overall_summary') or 'not stated'}\n"
+        f"Tests: {report_tests}"
+    )
+
+    system_prompt = (
+        "You are a careful medical safety checker. You are given identity + medical details "
+        "extracted from a patient's PRESCRIPTION and, separately, from a TEST REPORT. Decide "
+        "whether the two documents plausibly belong to the SAME patient, and only then whether "
+        "the prescribed medicines are consistent with the test results. Respond ONLY with valid "
+        "JSON: a single object with exactly these keys: \"match_status\", "
+        "\"patient_match_score\", \"matched\", \"mismatched\", \"comparison\".\n"
+        "STEP 1 - Verify identity: compare patient name similarity, age consistency, gender "
+        "consistency, and date proximity. Set \"patient_match_score\" to an integer 0-100 for "
+        "how confident you are they are the same patient. A clear age gap (e.g. a young child "
+        "vs an elderly adult), opposite gender, or a clearly different name is a strong "
+        "MISMATCH signal and must lower the score well below 50.\n"
+        "- \"match_status\": \"MATCH\" if identity is clearly consistent; \"PARTIAL_MATCH\" if "
+        "some fields match but others are missing/unverifiable; \"MISMATCH\" if there is a "
+        f"clear identity conflict OR patient_match_score is below {PATIENT_MATCH_MIN}.\n"
+        f"- \"matched\": a list of short {content_language} phrases for what is consistent "
+        "(empty list if none).\n"
+        f"- \"mismatched\": a list of short {content_language} phrases for each inconsistency or "
+        "unverifiable point (empty list if none).\n"
+        f"- \"comparison\": if match_status is MATCH or PARTIAL_MATCH, a 3-6 sentence plain-"
+        f"{content_language} explanation of whether the medicines are consistent with the test "
+        "results (no diagnosis; advise confirming with a doctor). If match_status is MISMATCH, "
+        "set \"comparison\" to an empty string and do NOT draw any medical conclusion.\n"
+        "Never invent a medical conclusion when identity does not match."
+    )
+    user_prompt = f"PRESCRIPTION:\n{presc_context}\n\nTEST REPORT:\n{report_context}"
+
     response = client.models.generate_content(
         model=GEMINI_MODEL,
-        contents=prompt,
-        config=types.GenerateContentConfig(temperature=0.4),
+        contents=user_prompt,
+        config=types.GenerateContentConfig(
+            system_instruction=system_prompt,
+            temperature=0.3,
+        ),
     )
-    return response.text.strip()
+
+    content = response.text.strip()
+    if content.startswith("```"):
+        content = content.strip("`")
+        if content.startswith("json"):
+            content = content[4:].strip()
+    data = json.loads(content)
+    if not isinstance(data, dict):
+        data = {}
+
+    status = str(data.get("match_status") or "").strip().upper().replace(" ", "_")
+    if status not in ("MATCH", "PARTIAL_MATCH", "MISMATCH"):
+        status = "PARTIAL_MATCH"
+    try:
+        score = int(float(data.get("patient_match_score")))
+    except (TypeError, ValueError):
+        score = 0
+    score = max(0, min(100, score))
+
+    matched_raw = data.get("matched")
+    matched = [str(x).strip() for x in matched_raw if str(x).strip()] if isinstance(matched_raw, list) else []
+    mismatched_raw = data.get("mismatched")
+    mismatched = [str(x).strip() for x in mismatched_raw if str(x).strip()] if isinstance(mismatched_raw, list) else []
+    comparison = str(data.get("comparison") or "").strip()
+
+    # Enforce the threshold on our side too - never trust the model alone to gate
+    # a medical conclusion. Below the score floor it is always a MISMATCH with no
+    # comparison text, regardless of what the model labelled it.
+    if score < PATIENT_MATCH_MIN:
+        status = "MISMATCH"
+    if status == "MISMATCH":
+        comparison = ""
+
+    return {
+        "match_status": status,
+        "patient_match_score": score,
+        "matched": matched,
+        "mismatched": mismatched,
+        "comparison": comparison,
+    }
+
+
+def build_comparison_card_html(comp: dict, T: dict) -> str:
+    """Render the prescription-vs-report consistency result INSIDE the existing
+    .card component (no new UI components). Shows the MATCH/PARTIAL/MISMATCH
+    verdict, the patient match score, what matched/didn't, and - only when the
+    documents plausibly belong to the same patient - the medical comparison.
+    """
+    status = comp.get("match_status", "PARTIAL_MATCH")
+    score = int(comp.get("patient_match_score", 0) or 0)
+    matched = comp.get("matched") or []
+    mismatched = comp.get("mismatched") or []
+    comparison = comp.get("comparison") or ""
+
+    if status == "MATCH":
+        status_label = T["compare_status_match"]
+    elif status == "MISMATCH":
+        status_label = T["compare_status_mismatch"]
+    else:
+        status_label = T["compare_status_partial"]
+
+    def _list_block(label: str, items: list) -> str:
+        if not items:
+            return ""
+        lis = "".join(f"<li>{html.escape(str(i))}</li>" for i in items)
+        return (
+            f"<p style='margin:0.5rem 0 0.2rem 0;'><strong>{html.escape(label)}:</strong></p>"
+            f"<ul style='margin:0 0 0.4rem 1.1rem;'>{lis}</ul>"
+        )
+
+    if status == "MISMATCH":
+        warning_html = (
+            f"<div style='background:{DANGER_COLORS['bg']}; border:1px solid {DANGER_COLORS['border']}; "
+            f"border-left:6px solid {DANGER_COLORS['border']}; border-radius:12px; padding:0.85rem 1rem; "
+            f"margin:0.6rem 0; color:{DANGER_COLORS['text']} !important;'>"
+            f"<span style='color:{DANGER_COLORS['text']} !important;'>{html.escape(T['compare_mismatch_warning'])}</span></div>"
+        )
+        body_html = warning_html + _list_block(T["compare_mismatched_label"], mismatched)
+        body_html += f"<p style='opacity:0.85;'>{html.escape(T['compare_no_medical_on_mismatch'])}</p>"
+    else:
+        body_html = _list_block(T["compare_matched_label"], matched)
+        body_html += _list_block(T["compare_mismatched_label"], mismatched)
+        if comparison:
+            body_html += f"<p style='margin-top:0.5rem; line-height:1.65;'>{html.escape(comparison)}</p>"
+
+    return (
+        f"<div class='card'>"
+        f"<h3 style='margin-top:0;'>{html.escape(status_label)} "
+        f"<span style='font-size:0.8rem; font-weight:700; opacity:0.85;'>&middot; "
+        f"{html.escape(T['compare_score_label'])}: {score}%</span></h3>"
+        f"{body_html}"
+        f"</div>"
+    )
 
 
 def build_test_report_text(result: dict, T: dict) -> str:
@@ -2573,6 +2974,8 @@ def render_chat_panel(gemini_client, file_hash: str, language: str, T: dict) -> 
                         )
                         answer = (response.text or "").strip() or T["chat_error"]
 
+                except AllKeysExhaustedError:
+                    answer = T["all_keys_busy"]
                 except genai_errors.APIError as exc:
                     answer = f"{T['error_api_prefix']}{exc}"
                 except httpx.TransportError:
@@ -3881,15 +4284,35 @@ def render_upload_flow() -> None:
         with st.status(T["status_analyzing"], expanded=True) as status:
             st.write(T["status_preparing"])
             try:
-                st.write(T["status_reading"])
+                st.write(T["status_classifying"])
                 result = explain_prescription(
                     gemini_client, image, content_language=T["content_language"]
                 )
+                # Safety gate: only accept real, legible prescriptions. A medicine
+                # box/strip/label/bill or an unreadable image is rejected here so
+                # the app never hallucinates a prescription around it.
+                if (
+                    not result.get("is_prescription")
+                    or result.get("classification_confidence", 0) < CLASSIFY_CONFIDENCE_MIN
+                ):
+                    status.update(label=T["status_classifying"], state="error")
+                    cat_label = get_category_label(T, result.get("image_category", "unknown"))
+                    st.error(T["classify_not_prescription"].format(category=cat_label))
+                    st.stop()
+                if result.get("extraction_confidence", 0) < EXTRACTION_CONFIDENCE_MIN:
+                    status.update(label=T["status_classifying"], state="error")
+                    st.error(T["extraction_unclear"])
+                    st.stop()
+                st.write(T["status_reading"])
                 st.session_state["cached_file_hash"] = file_hash
                 st.session_state["cached_language"] = language
                 st.session_state["cached_result"] = result
                 st.session_state.pop("cached_comparison", None)
                 status.update(label=T["status_done"], state="complete", expanded=False)
+            except AllKeysExhaustedError:
+                status.update(label=T["status_api_error"], state="error")
+                st.error(T["all_keys_busy"])
+                st.stop()
             except genai_errors.APIError as exc:
                 status.update(label=T["status_api_error"], state="error")
                 st.error(f"{T['error_api_prefix']}{exc}")
@@ -4390,11 +4813,30 @@ else:
                                 test_result = explain_test_report(
                                     gemini_client, test_file_part, content_language=T["content_language"]
                                 )
+                                # Safety gate: only accept real, legible test reports.
+                                if (
+                                    not test_result.get("is_test_report")
+                                    or test_result.get("classification_confidence", 0) < CLASSIFY_CONFIDENCE_MIN
+                                ):
+                                    status.update(label=T["status_classifying"], state="error")
+                                    cat_label = get_category_label(
+                                        T, test_result.get("image_category", "unknown")
+                                    )
+                                    st.error(T["classify_not_test_report"].format(category=cat_label))
+                                    st.stop()
+                                if test_result.get("extraction_confidence", 0) < EXTRACTION_CONFIDENCE_MIN:
+                                    status.update(label=T["status_classifying"], state="error")
+                                    st.error(T["extraction_unclear"])
+                                    st.stop()
                                 st.session_state["cached_test_file_hash"] = test_file_hash
                                 st.session_state["cached_test_language"] = language
                                 st.session_state["cached_test_result"] = test_result
                                 st.session_state.pop("cached_comparison", None)
                                 status.update(label=T["status_done"], state="complete", expanded=False)
+                            except AllKeysExhaustedError:
+                                status.update(label=T["status_api_error"], state="error")
+                                st.error(T["all_keys_busy"])
+                                st.stop()
                             except genai_errors.APIError as exc:
                                 status.update(label=T["status_api_error"], state="error")
                                 st.error(f"{T['error_api_prefix']}{exc}")
@@ -4538,26 +4980,26 @@ else:
                     ):
                         with st.spinner(T["compare_thinking"]):
                             try:
-                                compare_test_text = build_test_report_text(
-                                    st.session_state["cached_test_result"], T
-                                )
                                 st.session_state["cached_comparison"] = compare_reports(
-                                    gemini_client, report_text, compare_test_text, T["content_language"]
+                                    gemini_client,
+                                    result,
+                                    st.session_state["cached_test_result"],
+                                    T["content_language"],
                                 )
+                            except AllKeysExhaustedError:
+                                st.error(T["all_keys_busy"])
                             except genai_errors.APIError as exc:
                                 st.error(f"{T['error_api_prefix']}{exc}")
                             except httpx.TransportError:
                                 st.error(T["error_network"])
+                            except json.JSONDecodeError:
+                                st.error(T["error_parse"])
                             except Exception as exc:
                                 st.error(f"{T['error_unexpected_prefix']}{exc}")
 
-                    if "cached_comparison" in st.session_state:
+                    if isinstance(st.session_state.get("cached_comparison"), dict):
                         render_html(
-                            f"""
-                            <div class="card">
-                                <p>{html.escape(st.session_state['cached_comparison'])}</p>
-                            </div>
-                            """
+                            build_comparison_card_html(st.session_state["cached_comparison"], T)
                         )
 
             elif nav_page == "about":
