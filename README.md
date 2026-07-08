@@ -20,6 +20,7 @@ A simple web app that reads a photo of a prescription and explains it in **plain
 
 ## Features
 
+- **🛡️ Image safety gate** — before analyzing, the AI classifies the uploaded image. If it isn't a real doctor's prescription (e.g. a medicine box, blister strip, pharmacy label, bill, or a non-medical photo), it stops and says so instead of inventing a fake prescription. The Test Report Interpreter has the same gate. Low-confidence or unreadable images are asked to be re-uploaded clearer.
 - **Prescription summary** — patient name/age, a plain-language summary, probable diagnosis, treatment purpose, and how many medicines were found.
 - **Doctor info** — name, degree, hospital/chamber, phone (if visible on the prescription).
 - **Dates** — prescription date and follow-up date (if mentioned).
@@ -29,7 +30,7 @@ A simple web app that reads a photo of a prescription and explains it in **plain
 - **Per-medicine cards** — purpose, dosage, duration, side effects, precautions, and a confidence badge (how sure the AI is about that reading).
 - **Export the report** — download as PDF, download as TXT, print, or copy the full result to your clipboard.
 - **💬 Chat with your prescription** — a floating chat launcher (the animated 🤖 button pinned to the bottom-right corner) opens a docked assistant panel. Ask follow-up questions in plain language ("Why was this medicine given?", "Should I take it on an empty stomach?"). The chatbot remembers the conversation and stays grounded in your specific prescription.
-- **🧪 AI Medical Test Report Interpreter** — upload a lab/test report (image or PDF) separately from the prescription. For each test it explains why it's typically done, what your result means in plain language, and marks it 🟢 Normal / 🟡 Borderline / 🔴 Abnormal — without ever stating a diagnosis. If you've analyzed both a prescription and a test report, click **⚖️ Compare with Prescription** to see whether your medicines line up with your results.
+- **🧪 AI Medical Test Report Interpreter** — upload a lab/test report (image or PDF) separately from the prescription. For each test it explains why it's typically done, what your result means in plain language, and marks it 🟢 Normal / 🟡 Borderline / 🔴 Abnormal — without ever stating a diagnosis. If you've analyzed both a prescription and a test report, click **⚖️ Compare with Prescription** — this first checks whether both documents belong to the **same patient** (name, age, gender, date) and shows a **MATCH / PARTIAL MATCH / MISMATCH** verdict. If they look like different patients, it warns you and refuses to draw a medical conclusion, instead of blindly comparing two unrelated documents.
 - **Multi-page dashboard** — after a prescription is analyzed, the sidebar navigation switches between separate pages: Summary, Medicines, Daily Schedule, Advice & Warnings, Report Analysis, and About. The app uses a single, eye-friendly dark theme throughout.
 - **Accessibility settings** (in the sidebar):
   - 🌐 Switch the whole app between Bangla and English
@@ -83,9 +84,17 @@ Open the new `.env` file in any text editor and paste your key:
 GEMINI_API_KEY=your-real-gemini-key-here
 ```
 
-Don't have a key? Get a free one at [Google AI Studio](https://aistudio.google.com/apikey) → "Create API key".
+Don't have a key? Get a free one at [Google AI Studio](https://aistudio.google.com/apikey) → "Create API key". A key looks like `AIza...` or `AQ....` — paste it exactly, with no quotes or spaces.
 
-(The `.env` file is never uploaded to GitHub — it's already in `.gitignore`, so your key stays private.)
+**Optional — multiple keys (avoid running out of free quota):** the free tier limits requests per day *per Google account*. To get more headroom, create keys from a few different Google accounts and add them as numbered keys — the app tries key `_1` first and automatically falls over to `_2`, `_3` when one hits its rate limit:
+
+```
+GEMINI_API_KEY_1=key-from-account-1
+GEMINI_API_KEY_2=key-from-account-2
+GEMINI_API_KEY_3=key-from-account-3
+```
+
+(The `.env` file is never uploaded to GitHub — it's already in `.gitignore`, so your key stays private. On Hugging Face Spaces, add the same names under **Settings → Variables and secrets** instead of a `.env` file.)
 
 ### 5. Run the app
 
