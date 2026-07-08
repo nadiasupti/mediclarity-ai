@@ -5,3 +5,10 @@ backgroundColor = "#0f172a"
 secondaryBackgroundColor = "#1e293b"
 textColor = "#e2e8f0"
 font = "sans serif"
+
+# Hugging Face serves the app behind a reverse proxy. XSRF/CORS must be off or
+# the file-uploader POST is rejected with a 403. maxUploadSize caps image size.
+[server]
+enableXsrfProtection = false
+enableCORS = false
+maxUploadSize = 10

@@ -33,4 +33,11 @@ ENV STREAMLIT_SERVER_PORT=8501 \
 
 EXPOSE 8501
 
-CMD ["streamlit", "run", "app.py"]
+# XSRF/CORS flags are also passed on the command line (highest config
+# precedence) to be certain they take effect behind HF's proxy - without this
+# the file-uploader POST is rejected with a 403.
+CMD ["streamlit", "run", "app.py", \
+     "--server.port=8501", \
+     "--server.address=0.0.0.0", \
+     "--server.enableXsrfProtection=false", \
+     "--server.enableCORS=false"]
