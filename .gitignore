@@ -6,3 +6,5 @@ venv/
 .streamlit/secrets.toml
 .DS_Store
 .claude/
+streamlit_restart.log
+*.log

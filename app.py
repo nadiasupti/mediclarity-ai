@@ -496,11 +496,17 @@ TRANSLATIONS = {
         "risk_low": "নিম্ন",
         "about_heading": "ℹ️ MediClarity AI সম্পর্কে",
         "about_body": (
-            "প্রেসক্রিপশনের হাতের লেখা বোঝা প্রায়ই কঠিন। **MediClarity AI** একটি ছবি থেকেই "
-            "Google Gemini Vision দিয়ে আপনার ওষুধের নাম, উদ্দেশ্য, সেবনবিধি, পার্শ্বপ্রতিক্রিয়া "
-            "ও সতর্কতা সহজ বাংলায় বুঝিয়ে দেয়।"
+            "**MediClarity AI** এমন একটি AI টুল, যা Google Gemini Vision ব্যবহার করে "
+            "প্রেসক্রিপশন বা মেডিকেল রিপোর্টের ছবি থেকে গুরুত্বপূর্ণ তথ্য পড়ে সহজ বাংলায় "
+            "ব্যাখ্যা করে। ওষুধের নাম, ব্যবহার, সেবনবিধি, সম্ভাব্য পার্শ্বপ্রতিক্রিয়া এবং "
+            "প্রয়োজনীয় সতর্কতা এক জায়গায় সহজভাবে তুলে ধরে।"
         ),
         "about_tech_heading": "🛠️ ব্যবহৃত প্রযুক্তি",
+        "about_tech_body": (
+            "⚡ Streamlit\n"
+            "🧠 Google Gemini 2.5 Flash (Vision)\n"
+            "🐍 Python"
+        ),
         "about_disclaimer": "⚠️ এটি একটি সহায়ক টুল, চিকিৎসা পরামর্শের বিকল্প নয়।",
         "sidebar_tagline": "সহজ ভাষায় মেডিকেল সমাধান",
         "sidebar_description": (
@@ -720,11 +726,18 @@ TRANSLATIONS = {
         "risk_low": "Low",
         "about_heading": "ℹ️ About MediClarity AI",
         "about_body": (
-            "Prescription handwriting is often hard to read. **MediClarity AI** uses Google "
-            "Gemini Vision to explain your medicine names, purpose, dosage, side effects, and "
-            "precautions from just a photo, in plain language."
+            "**MediClarity AI** is an AI-powered tool that uses Google Gemini Vision "
+            "to analyze prescription or medical report images and explain the information "
+            "in simple, easy-to-understand language. It highlights medicine names, "
+            "their purpose, dosage instructions, possible side effects, and important "
+            "precautions in one place."
         ),
         "about_tech_heading": "🛠️ Tech Used",
+        "about_tech_body": (
+            "⚡ Streamlit\n"
+            "🧠 Google Gemini 2.5 Flash (Vision)\n"
+            "🐍 Python"
+        ),
         "about_disclaimer": "⚠️ This is a supportive tool, not a substitute for medical advice.",
         "sidebar_tagline": "Simple Language Medical Solution",
         "sidebar_description": (
@@ -5015,7 +5028,7 @@ else:
                     f"""
                     <div class="card">
                         <h3>{T['about_tech_heading']}</h3>
-                        <p>Streamlit &middot; Google Gemini 2.5 Flash (Vision) &middot; Python</p>
+                        <p>{T['about_tech_body'].replace(chr(10), '<br>')}</p>
                     </div>
                     """
                 )
